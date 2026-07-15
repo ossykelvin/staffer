@@ -1,0 +1,42 @@
+[
+  {
+    "id": "APR-221",
+    "title": "Approve release readiness workflow",
+    "requester": "Nakamura",
+    "type": "Workflow publication",
+    "risk": "Medium",
+    "submitted": "18 minutes ago"
+  },
+  {
+    "id": "APR-219",
+    "title": "Approve CompliCare pilot onboarding sequence",
+    "requester": "Nancy",
+    "type": "Customer process",
+    "risk": "High",
+    "submitted": "2 hours ago"
+  },
+  {
+    "id": "APR-216",
+    "title": "Approve external SEO and lead-generation campaign draft",
+    "requester": "Benny",
+    "type": "External communication",
+    "risk": "Medium",
+    "submitted": "Yesterday"
+  },
+  {
+    "id": "APR-214",
+    "title": "Approve Staffer data-retention and compliance control baseline",
+    "requester": "Lawal",
+    "type": "Policy and governance",
+    "risk": "High",
+    "submitted": "Yesterday"
+  },
+  {
+    "id": "APR-212",
+    "title": "Approve Staffer agent-registry implementation and migration plan",
+    "requester": "Raj",
+    "type": "Engineering change",
+    "risk": "High",
+    "submitted": "Yesterday"
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "TSK-1042",
+    "title": "Prepare onboarding workflow for first CompliCare pilot",
+    "owner": "Nancy",
+    "priority": "High",
+    "status": "In review",
+    "due": "Today",
+    "project": "CompliCare"
+  },
+  {
+    "id": "TSK-1041",
+    "title": "Review production readiness checklist",
+    "owner": "Nakamura",
+    "priority": "Critical",
+    "status": "Awaiting approval",
+    "due": "Today",
+    "project": "Staffer"
+  },
+  {
+    "id": "TSK-1039",
+    "title": "Draft customer support response standard",
+    "owner": "Kristin",
+    "priority": "Medium",
+    "status": "In progress",
+    "due": "Tomorrow",
+    "project": "KOP Technology"
+  },
+  {
+    "id": "TSK-1038",
+    "title": "Review customer support triage and onboarding responses",
+    "owner": "Anna",
+    "priority": "High",
+    "status": "In progress",
+    "due": "Tomorrow",
+    "project": "Customer Experience"
+  },
+  {
+    "id": "TSK-1037",
+    "title": "Prepare SEO and lead-generation campaign plan",
+    "owner": "Benny",
+    "priority": "High",
+    "status": "In review",
+    "due": "Thursday",
+    "project": "KOP Technology Growth"
+  },
+  {
+    "id": "TSK-1036",
+    "title": "Map lead-to-demo process",
+    "owner": "Mobola",
+    "priority": "Medium",
+    "status": "Queued",
+    "due": "Friday",
+    "project": "Commercial Operations"
+  },
+  {
+    "id": "TSK-1035",
+    "title": "Review Staffer data-protection and policy control baseline",
+    "owner": "Lawal",
+    "priority": "High",
+    "status": "In review",
+    "due": "Friday",
+    "project": "Staffer Governance"
+  },
+  {
+    "id": "TSK-1032",
+    "title": "Implement the database-backed agent registry foundation",
+    "owner": "Raj",
+    "priority": "High",
+    "status": "Queued",
+    "due": "Friday",
+    "project": "Staffer Engineering"
+  }
+]

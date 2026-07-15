@@ -1,0 +1,193 @@
+# Staffer Product Backlog
+
+This backlog turns the broad product roadmap into implementation-sized slices. Work from the top unless a dependency blocks the item. Do not mark an item complete until implementation, tests, lint, build, and the relevant roadmap note are done.
+
+## Product north star
+
+Staffer should move work through a governed operating loop:
+
+`trigger -> task -> agent -> review -> approval -> action -> audit`
+
+The current app shows the shape of that product, but most screens are still static. The first milestone is therefore not "more UI"; it is making the existing UI behave like a usable product in demo mode while preserving the path to Supabase-backed live mode.
+
+## Now / Next / Later roadmap
+
+### Now: make the prototype operational
+
+- [x] PB-001: Define the route map and clickable interaction contract. Implemented in `docs/interaction-contract.md`; verified with lint, typecheck, build, and HTTP smoke checks.
+- [x] PB-002: Make task rows clickable and add task detail pages. Implemented `/tasks/[id]` and linked dashboard/task rows; verified with lint, typecheck, build, and `/tasks/TSK-1042` smoke check.
+- [x] PB-003: Add a demo-mode task creation flow. Implemented `/tasks/new` with validated non-persistent demo confirmation; verified with lint, typecheck, build, and `/tasks/new` smoke check.
+- [x] PB-004: Add approval detail pages with review, approve, reject, and request-changes states. Implemented `/approvals/[id]` and demo decision controls; verified with lint, typecheck, build, and `/approvals/APR-221` smoke check.
+- [x] PB-005: Add workflow detail pages and a dry-run timeline. Implemented `/workflows/[id]` dry-run views; verified with lint, typecheck, build, and `/workflows/support-triage` smoke check.
+- [x] PB-006: Add useful empty, loading, error, and confirmation states across the app. Implemented shared empty state plus route-level loading, error, and not-found states; verified with lint, typecheck, build, and smoke checks.
+- [x] PB-007: Fix local configuration ergonomics so the app starts from `.env.local.example` without hidden runtime failures. Quoted colour values and normalised blank optional env values; verified with lint, typecheck, build, and `/api/health` smoke check.
+
+### Next: connect the product to real governed data
+
+- [x] PB-008: Repair and verify the Supabase RLS membership model. Implemented `20260715082325_staffer_live_foundation.sql` with non-recursive membership helpers, explicit grants, role policies, and static verification; live apply/advisors remain pending until a Supabase project is linked.
+- [x] PB-009: Implement Supabase Auth, protected routes, and unauthorised states. Implemented Next.js Proxy protection, login/sign-up, auth callback, and unauthorised route; verified with lint, typecheck, build, and smoke checks.
+- [x] PB-010: Add organisation onboarding and founder/admin membership. Implemented onboarding route and `staffer.create_organisation_for_current_user` RPC that creates founder membership and audit event; verified statically and by build.
+- [x] PB-011: Build tenant-aware repositories with demo fallback parity. Implemented repository layer that uses Supabase `staffer` schema in live mode and seed data in demo mode; verified with smoke checks.
+- [x] PB-012: Replace JSON reads with live repositories for agents, tasks, workflows, and approvals. Updated page/API data access to repository functions while retaining seed data for fallback/static params; verified with lint, typecheck, build, and smoke checks.
+- [x] PB-013: Add audit events for task state changes, approval decisions, and material mutations. Implemented audit RPC, task transition server action, and approval decision server action that record demo/live audit results; verified statically and through task/approval smoke checks.
+
+### Later: build the governed AI workforce
+
+- [ ] PB-014: Implement editable, versioned agent profiles and permissions.
+- [ ] PB-015: Implement task comments, dependencies, watchers, retries, and evidence timelines.
+- [ ] PB-016: Implement the approval policy engine and exact-payload execution checks.
+- [ ] PB-017: Implement the server-only AI provider router with fallback, guardrails, and structured output.
+- [ ] PB-018: Implement the tool registry with server-enforced permissions.
+- [ ] PB-019: Implement durable workflow execution, pause, resume, retry, and replay.
+- [ ] PB-020: Implement knowledge ingestion, retrieval, citations, retention, and access control.
+- [ ] PB-021: Launch the first live workflow: Customer Support Triage.
+- [ ] PB-022: Launch the second live workflow: Feature Intake to Engineering.
+- [ ] PB-023: Add governance dashboards for audit, cost, quality, latency, and failures.
+
+## Ready backlog
+
+### PB-001: Define the route map and clickable interaction contract
+
+**Problem:** Users can see cards, tables, and buttons, but cannot confidently predict what will happen when they click.
+
+**Scope:**
+- Document every primary navigation route.
+- Define the expected click behavior for dashboard cards, task rows, agent cards, workflow rows, approval cards, and settings panels.
+- Decide which actions are demo-only, read-only, or live-backed.
+- Add disabled states and explanatory labels where an action is intentionally unavailable.
+
+**Acceptance:**
+- A tester can click through the product without dead-end buttons.
+- Every visible primary action either navigates, opens a form/detail view, or is clearly disabled with a reason.
+- No production or external action can execute from demo mode.
+
+**Touches:** App shell, dashboard, tasks, approvals, workflows, knowledge, integrations, settings.
+
+### PB-002: Make task rows clickable and add task detail pages
+
+**Problem:** Tasks are displayed as table rows, but they are not work objects yet.
+
+**Scope:**
+- Add `/tasks/[id]`.
+- Link task rows from the dashboard and task board.
+- Show task metadata, owner, priority, status, due date, project, approval path, evidence, and activity timeline.
+- Add placeholder comments/activity using demo data.
+
+**Acceptance:**
+- A user can open a task, understand why it exists, see who owns it, and see what action is required next.
+- Missing task IDs show a useful not-found state.
+- Demo data remains validated through the shared schema layer.
+
+**Touches:** `src/app/tasks`, `src/lib/data.ts`, `src/lib/schemas.ts`.
+
+### PB-003: Add a demo-mode task creation flow
+
+**Problem:** "Create task" is currently a visual button.
+
+**Scope:**
+- Add a task creation screen or modal.
+- Capture title, owner, priority, due date, project, and description.
+- In demo mode, persist to client/session state or return a clear non-persistent demo confirmation.
+- In live mode, block the flow until authenticated tenant repositories exist.
+
+**Acceptance:**
+- The button always does something understandable.
+- Validation errors are shown inline.
+- Demo-created tasks cannot be mistaken for committed live records.
+
+**Touches:** Tasks page, form components, validation schemas.
+
+### PB-004: Add approval detail and decision states
+
+**Problem:** Approvals show "Review" and "Approve" buttons, but no decision workflow exists.
+
+**Scope:**
+- Add `/approvals/[id]`.
+- Show proposed action, requester, risk, evidence, exact payload placeholder, and decision history.
+- Add demo approve, reject, request changes, and expire states.
+- Keep execution blocked; approval should only change demo state until live audit exists.
+
+**Acceptance:**
+- A reviewer can inspect what they are approving before making a decision.
+- Decisions require confirmation and produce a visible activity entry.
+- The UI communicates that protected execution is not enabled yet.
+
+**Touches:** Approvals page, approval schemas, status components.
+
+### PB-005: Add workflow detail pages and dry-run timeline
+
+**Problem:** Workflows are described, but users cannot inspect or simulate the operating loop.
+
+**Scope:**
+- Add `/workflows/[id]`.
+- Show trigger, steps, approval requirement, SLA, owning department, and current status.
+- Add a dry-run timeline for `trigger -> task -> agent -> review -> approval -> action -> audit`.
+- Provide clear blocked states for execution until the workflow engine exists.
+
+**Acceptance:**
+- A workflow can be reviewed end to end without reading code.
+- Dry-run output is deterministic demo data, not AI-generated.
+- Protected actions remain non-executable.
+
+**Touches:** Workflows page, workflow data model, timeline UI.
+
+### PB-006: Add app-wide states
+
+**Problem:** The app lacks consistent loading, empty, error, confirmation, and not-found handling.
+
+**Scope:**
+- Add route-level `loading.tsx`, `error.tsx`, and `not-found.tsx` where needed.
+- Add empty states for zero tasks, approvals, workflows, knowledge documents, and integrations.
+- Add confirmation patterns for risky demo actions.
+
+**Acceptance:**
+- Users never see a blank or broken-feeling page for common states.
+- Error copy explains whether the issue is demo data, auth, config, or unavailable live services.
+- Confirmation states are present before any high-risk action placeholder.
+
+**Touches:** Route segments, shared UI components.
+
+### PB-007: Fix local configuration ergonomics
+
+**Problem:** The app can start but render a server error when required public env values are blank.
+
+**Scope:**
+- Decide which bootstrap values are truly required and which can use explicit demo fallback.
+- Ensure `.env.local.example` and validation behavior match.
+- Add a startup health check or developer-facing config error page.
+- Keep secrets out of browser code.
+
+**Acceptance:**
+- Fresh setup from `.env.local.example` starts and renders.
+- Missing required secrets fail only when the related feature is invoked.
+- Non-secret public config errors are actionable.
+
+**Touches:** `src/lib/env.ts`, `.env.local.example`, health route.
+
+## Sequencing rules
+
+- PB-001 through PB-007 may use demo data only.
+- PB-008 through PB-013 must not remove demo mode until live parity is proven.
+- Any item touching Supabase data requires RLS and permission verification.
+- Any item touching an agent, task, approval, or workflow mutation must emit an audit event once live mode exists.
+- Any item exposing an external or protected action must require a recorded approval before execution.
+
+## Backlog item template
+
+Use this shape when adding a new backlog item:
+
+```md
+### PB-000: Short title
+
+**Problem:** What user or platform problem this solves.
+
+**Scope:**
+- Small implementation slice.
+- Explicit exclusions.
+
+**Acceptance:**
+- Testable completion condition.
+- Security/governance condition where relevant.
+
+**Touches:** Files, routes, tables, or services likely affected.
+```

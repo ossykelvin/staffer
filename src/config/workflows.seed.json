@@ -1,0 +1,129 @@
+[
+  {
+    "id": "support-triage",
+    "name": "Customer Support Triage",
+    "department": "Customer Experience",
+    "trigger": "New support email or manually assigned request",
+    "status": "draft",
+    "steps": [
+      "Classify request",
+      "Search approved knowledge",
+      "Draft response",
+      "QA review",
+      "Human approval",
+      "Create or send response"
+    ],
+    "approval": "Required before external send",
+    "sla": "Configured by severity"
+  },
+  {
+    "id": "feature-intake",
+    "name": "Feature Intake to Engineering",
+    "department": "Product",
+    "trigger": "New customer feedback or founder request",
+    "status": "draft",
+    "steps": [
+      "Summarise request",
+      "Find related evidence",
+      "Draft requirements",
+      "Architecture review",
+      "Draft implementation plan and technical tasks",
+      "QA acceptance criteria",
+      "Founder approval",
+      "Create GitHub issue"
+    ],
+    "approval": "Required before roadmap commitment",
+    "sla": "Configured by priority"
+  },
+  {
+    "id": "daily-command-brief",
+    "name": "Daily Command Brief",
+    "department": "Executive Office",
+    "trigger": "Scheduled weekday run",
+    "status": "draft",
+    "steps": [
+      "Collect overdue work",
+      "Review risks and approvals",
+      "Summarise customer signals",
+      "Prepare decision list",
+      "Publish internal brief"
+    ],
+    "approval": "Not required for internal draft",
+    "sla": "Before configured workday start"
+  },
+  {
+    "id": "release-gate",
+    "name": "Release Readiness Gate",
+    "department": "Quality & Governance",
+    "trigger": "Pull request marked ready for release",
+    "status": "draft",
+    "steps": [
+      "Check approved scope and acceptance criteria",
+      "Review pull request and implementation evidence",
+      "Run test, lint, build, and security checks",
+      "Review migration and rollback impact",
+      "Collect required approvals",
+      "Record release decision"
+    ],
+    "approval": "Engineering and founder approval",
+    "sla": "Configured per release class"
+  },
+  {
+    "id": "growth-campaign",
+    "name": "Growth Campaign Lifecycle",
+    "department": "Growth & Marketing",
+    "trigger": "Approved growth objective, product launch, or campaign request",
+    "status": "draft",
+    "steps": [
+      "Define audience and measurable objective",
+      "Research search demand, market, and competitors",
+      "Draft positioning, content, email, and sales enablement assets",
+      "Validate claims, consent, data use, and brand requirements",
+      "Review budget and channel plan",
+      "Human approval",
+      "Launch through approved integrations",
+      "Measure attribution, conversion, and pipeline impact"
+    ],
+    "approval": "Required before external launch, spend, bulk send, or commercial commitment",
+    "sla": "Configured by campaign priority and launch date"
+  },
+  {
+    "id": "compliance-assurance",
+    "name": "Compliance Assurance Lifecycle",
+    "department": "Quality & Governance",
+    "trigger": "New product, process, vendor, policy, incident, audit request, or material operational change",
+    "status": "draft",
+    "steps": [
+      "Identify applicable obligations and control owners",
+      "Classify data, regulated activity, risk, and evidence requirements",
+      "Assess current controls and document gaps",
+      "Draft DPIA, policy, audit evidence, or remediation actions",
+      "Validate with product, security, operations, and accountable human owners",
+      "Obtain approval for protected decisions and regulatory commitments",
+      "Record evidence, owners, due dates, residual risk, and review schedule",
+      "Monitor remediation and re-assess after material change"
+    ],
+    "approval": "Required for formal sign-off, policy publication, risk acceptance, regulatory communication, or sensitive-data action",
+    "sla": "Configured by regulatory deadline, risk severity, and audit commitment"
+  },
+  {
+    "id": "development-delivery",
+    "name": "Development Delivery Lifecycle",
+    "department": "Engineering",
+    "trigger": "Approved GitHub issue, technical task, defect, or remediation request",
+    "status": "draft",
+    "steps": [
+      "Confirm approved scope, acceptance criteria, architecture, and risk controls",
+      "Inspect existing code, dependencies, schema, and related tests",
+      "Create isolated branch and implementation plan",
+      "Implement the smallest complete vertical increment",
+      "Run unit, integration, lint, type, build, accessibility, and security checks",
+      "Prepare pull request with evidence, migration notes, and rollback plan",
+      "Obtain QA, security, architecture, compliance, and human approvals as required",
+      "Merge and deploy only through approved automation",
+      "Verify production health and record audit evidence"
+    ],
+    "approval": "Required for production, destructive, security-sensitive, paid-service, or externally committed changes",
+    "sla": "Configured by priority, release class, and incident severity"
+  }
+]
