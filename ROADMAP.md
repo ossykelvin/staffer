@@ -23,6 +23,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-011: Build tenant-aware repositories with demo fallback parity — implemented repository layer for agents, tasks, workflows and approvals with seed fallback; verified with lint, typecheck, build and smoke checks; no git commit because this folder is not a git repository
 - [x] PB-012: Replace JSON reads with live repositories for agents, tasks, workflows and approvals — updated page/API data access to repositories while retaining seed data for fallback/static params; verified with lint, typecheck, build and smoke checks; no git commit because this folder is not a git repository
 - [x] PB-013: Add audit events for task state changes, approval decisions and material mutations — implemented audit RPC plus task transition and approval decision server actions for demo/live audit events; verified by static live-foundation check, lint, typecheck, build and task/approval smoke checks; no git commit because this folder is not a git repository
+- [x] PB-014: Agent profile CRUD foundation — implemented `/agents/new`, profile edit forms, lifecycle status controls and server-side create/update/status actions; applied live migration `phase2_agent_registry_skills`; verified with static live-foundation check, lint, typecheck, build and Supabase RLS checks
+- [x] PB-015: Agent versioning — added append-only `staffer.agent_versions`, version snapshots for create/edit/activate/retire/skill mapping changes and visible version history on agent detail pages; verified live RLS and authenticated grants
+- [x] PB-016: Skills catalogue and mapping — added live skills catalogue reads, skill creation, agent-skill proficiency mapping/removal and tightened cross-tenant junction policies; verified no duplicate permissive Staffer policies for touched tables
 
 ## Current first-draft scope
 
@@ -56,9 +59,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 2 — Agent registry and skills
 
-- [ ] Implement create, edit, version, activate and retire agent profiles
-- [ ] Store biography, pronouns, location, timezone, experience, personality and communication style
-- [ ] Create skills catalogue and agent-skill proficiency mapping
+- [x] Implement create, edit, version, activate and retire agent profiles — `/agents/new` and `/agents/[id]` now provide live-backed profile creation/editing and draft/active/retired lifecycle controls with version snapshots and audit events
+- [x] Store biography, pronouns, location, timezone, experience, personality and communication style — editable profile form persists these fields in the tenant-owned `agents.profile` JSON with validated server actions and demo fallback
+- [x] Create skills catalogue and agent-skill proficiency mapping — skills can be created per organisation and mapped to agents through `agent_skills` with proficiency levels and tenant-safe RLS policies
 - [ ] Create tools catalogue and agent-tool permission mapping
 - [ ] Configure autonomy levels 0–5 with organisation defaults
 - [ ] Configure prohibited actions and approval rules per agent

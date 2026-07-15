@@ -1,7 +1,7 @@
 import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, workflows as demoWorkflows } from "@/lib/data";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentProfile, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/types";
+import type { AgentProfile, AgentSkill, AgentVersion, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -25,11 +25,39 @@ function asProfile(record: JsonRecord) {
   return (record.profile && typeof record.profile === "object" ? record.profile : {}) as JsonRecord;
 }
 
+function asNestedRecord(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return value as JsonRecord;
+}
+
+function mapAgentSkill(record: JsonRecord): AgentSkill | null {
+  const skill = asNestedRecord(record.skills);
+  if (!skill) {
+    return null;
+  }
+
+  return {
+    id: typeof skill.id === "string" ? skill.id : undefined,
+    key: String(skill.key ?? skill.id),
+    name: String(skill.name ?? skill.key ?? "Unnamed skill"),
+    description: typeof skill.description === "string" ? skill.description : undefined,
+    proficiency: typeof record.proficiency === "number" ? record.proficiency : undefined,
+  };
+}
+
 function mapAgent(record: JsonRecord): AgentProfile {
   const profile = asProfile(record);
+  const skillDetails = Array.isArray(record.agent_skills)
+    ? record.agent_skills.map((item) => mapAgentSkill(item as JsonRecord)).filter((item): item is AgentSkill => Boolean(item))
+    : [];
+  const skills = skillDetails.length ? skillDetails.map((skill) => skill.name) : asStringArray(profile.skills);
 
   return {
     id: String(record.key ?? record.id),
+    databaseId: typeof record.id === "string" ? record.id : undefined,
     name: String(record.name ?? "Unnamed agent"),
     jobTitle: String(record.job_title ?? profile.jobTitle ?? "Agent"),
     department: String(record.department ?? profile.department ?? "Operations"),
@@ -41,6 +69,7 @@ function mapAgent(record: JsonRecord): AgentProfile {
     status: String(record.status ?? "draft"),
     profileStatus: String(profile.profileStatus ?? "live"),
     autonomyLevel: Number(record.autonomy_level ?? 1),
+    version: typeof record.version === "number" ? record.version : 1,
     initials: String(profile.initials ?? String(record.name ?? "A").slice(0, 2).toUpperCase()),
     accent: String(profile.accent ?? "blue"),
     avatarPath: typeof profile.avatarPath === "string" ? profile.avatarPath : undefined,
@@ -51,9 +80,30 @@ function mapAgent(record: JsonRecord): AgentProfile {
     background: typeof profile.background === "string" ? profile.background : undefined,
     personalDetail: typeof profile.personalDetail === "string" ? profile.personalDetail : undefined,
     signatureHabit: typeof profile.signatureHabit === "string" ? profile.signatureHabit : undefined,
-    skills: asStringArray(profile.skills),
+    skills,
+    skillDetails,
     tools: asStringArray(profile.tools),
     requiresApproval: asStringArray(profile.requiresApproval),
+  };
+}
+
+function mapSkill(record: JsonRecord): AgentSkill {
+  return {
+    id: typeof record.id === "string" ? record.id : undefined,
+    key: String(record.key ?? record.id),
+    name: String(record.name ?? record.key ?? "Unnamed skill"),
+    description: typeof record.description === "string" ? record.description : undefined,
+  };
+}
+
+function mapAgentVersion(record: JsonRecord): AgentVersion {
+  return {
+    id: String(record.id),
+    agentId: String(record.agent_id),
+    version: Number(record.version ?? 1),
+    changeSummary: String(record.change_summary ?? "Agent profile version recorded."),
+    createdBy: typeof record.created_by === "string" ? record.created_by : undefined,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
   };
 }
 
@@ -141,7 +191,7 @@ export async function getAgents() {
   const { data, error } = await context.supabase
     .schema("staffer")
     .from("agents")
-    .select("*")
+    .select("*, agent_skills(proficiency, skills(id, key, name, description))")
     .eq("organisation_id", context.organisationId)
     .order("name");
 
@@ -151,6 +201,71 @@ export async function getAgents() {
 export async function getAgentById(id: string) {
   const allAgents = await getAgents();
   return allAgents.find((agent) => agent.id === id);
+}
+
+export async function getSkills() {
+  const context = await getLiveContext();
+  if (!context?.organisationId) {
+    const skills = new Map<string, AgentSkill>();
+
+    for (const agent of demoAgents) {
+      for (const skill of agent.skills) {
+        const key = skill.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        skills.set(key, { key, name: skill });
+      }
+    }
+
+    return [...skills.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("skills")
+    .select("id, key, name, description")
+    .eq("organisation_id", context.organisationId)
+    .order("name");
+
+  return error || !data ? [] : data.map((record) => mapSkill(record as JsonRecord));
+}
+
+export async function getAgentVersions(agentId: string) {
+  const context = await getLiveContext();
+  if (!context?.organisationId) {
+    const agent = demoAgents.find((item) => item.id === agentId);
+    return agent
+      ? [
+          {
+            id: `${agent.id}-v1`,
+            agentId: agent.id,
+            version: agent.version ?? 1,
+            changeSummary: "Seed profile loaded for demo mode.",
+            createdAt: new Date().toISOString(),
+          },
+        ]
+      : [];
+  }
+
+  const { data: agent } = await context.supabase
+    .schema("staffer")
+    .from("agents")
+    .select("id")
+    .eq("organisation_id", context.organisationId)
+    .eq("key", agentId)
+    .maybeSingle();
+
+  if (!agent?.id) {
+    return [];
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("agent_versions")
+    .select("id, agent_id, version, change_summary, created_by, created_at")
+    .eq("organisation_id", context.organisationId)
+    .eq("agent_id", agent.id)
+    .order("version", { ascending: false });
+
+  return error || !data ? [] : data.map((record) => mapAgentVersion(record as JsonRecord));
 }
 
 export async function getTasks() {

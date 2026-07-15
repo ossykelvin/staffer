@@ -1,1 +1,1 @@
-export type { AgentProfile, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/schemas";
+export type { AgentProfile, AgentSkill, AgentVersion, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/schemas";

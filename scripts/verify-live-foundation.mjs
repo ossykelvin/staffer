@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 const requiredFiles = [
   "supabase/migrations/20260715082325_staffer_live_foundation.sql",
+  "supabase/migrations/20260715183241_phase2_agent_registry_skills.sql",
   "src/proxy.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
@@ -11,6 +12,9 @@ const requiredFiles = [
   "src/app/auth/confirm/route.ts",
   "src/app/account/update-password/page.tsx",
   "src/app/invite/[token]/page.tsx",
+  "src/app/agents/actions.ts",
+  "src/app/agents/new/page.tsx",
+  "src/components/agent-profile-form.tsx",
   "src/app/settings/actions.ts",
   "src/app/approvals/[id]/actions.ts",
   "src/app/tasks/[id]/actions.ts",
@@ -41,6 +45,16 @@ const requiredPhaseOneSql = [
   "grant execute on function staffer.accept_invitation_for_current_user(text) to authenticated",
 ];
 
+const requiredPhaseTwoSql = [
+  "create table if not exists staffer.agent_versions",
+  "alter table staffer.agent_versions enable row level security",
+  "create policy agent_versions_member_select",
+  "create policy agent_versions_admin_insert",
+  "drop policy if exists agent_skills_admin_insert",
+  "join staffer.skills s on s.id = skill_id",
+  "s.organisation_id = a.organisation_id",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -61,10 +75,24 @@ for (const phrase of requiredPhaseOneSql) {
   }
 }
 
+const phaseTwoSql = readFileSync("supabase/migrations/20260715183241_phase2_agent_registry_skills.sql", "utf8").toLowerCase();
+for (const phrase of requiredPhaseTwoSql) {
+  if (!phaseTwoSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required Phase 2 SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
+  }
+}
+
+const agentActions = readFileSync("src/app/agents/actions.ts", "utf8");
+for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "agent.skill_mapped"]) {
+  if (!agentActions.includes(phrase)) {
+    throw new Error(`Missing agent registry action phrase: ${phrase}`);
   }
 }
 

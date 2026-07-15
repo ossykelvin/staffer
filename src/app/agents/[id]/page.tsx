@@ -1,32 +1,46 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { assignAgentSkillAction, createSkillAction, removeAgentSkillAction, setAgentStatusAction, updateAgentAction } from "@/app/agents/actions";
+import { AgentProfileForm } from "@/components/agent-profile-form";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { agents } from "@/lib/data";
-import { getAgentById } from "@/lib/repositories/staffer";
+import { getAgentById, getAgentVersions, getSkills } from "@/lib/repositories/staffer";
 
 export function generateStaticParams() {
   return agents.map((agent) => ({ id: agent.id }));
 }
 
-export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AgentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; message?: string }>;
+}) {
   const { id } = await params;
-  const agent = await getAgentById(id);
+  const [agent, skills, versions, query] = await Promise.all([getAgentById(id), getSkills(), getAgentVersions(id), searchParams]);
   if (!agent) notFound();
+  const displayedSkills = agent.skillDetails?.length
+    ? agent.skillDetails
+    : agent.skills.map((skill) => ({ key: skill, name: skill, id: undefined, proficiency: undefined }));
 
   return (
     <>
       <PageHeading
         eyebrow={agent.department}
         title={agent.name}
-        description={agent.summary}
+        description={`${agent.summary} ${agent.version ? `Version ${agent.version}.` : ""}`}
         action={
           <Link href="/agents" className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-300 transition hover:bg-white/7">
             Back to staff directory
           </Link>
         }
       />
+
+      {query.error ? <div className="mb-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-5 text-sm text-rose-100">{query.error}</div> : null}
+      {query.message ? <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/8 p-5 text-sm text-emerald-100">{query.message}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
@@ -76,6 +90,10 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               <dt className="text-xs uppercase tracking-wider text-slate-600">Profile</dt>
               <dd className="mt-1 text-emerald-300">{agent.profileStatus}</dd>
             </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-slate-600">Version</dt>
+              <dd className="mt-1 text-slate-300">v{agent.version ?? 1}</dd>
+            </div>
           </dl>
 
           <div className="mt-7 border-t border-white/7 pt-6">
@@ -110,15 +128,97 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               <p className="mt-2 text-sm leading-6 text-slate-300">{agent.signatureHabit}</p>
             </div>
           ) : null}
+
+          <div className="mt-7 border-t border-white/7 pt-6">
+            <p className="text-xs uppercase tracking-wider text-slate-600">Lifecycle controls</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["draft", "active", "retired"].map((status) => (
+                <form key={status} action={setAgentStatusAction}>
+                  <input type="hidden" name="key" value={agent.id} />
+                  <input type="hidden" name="status" value={status} />
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/7"
+                  >
+                    Set {status}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
         </section>
 
         <div className="space-y-6">
           <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold">Core skills</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {agent.skills.map((skill) => (
-                <div key={skill} className="rounded-xl border border-blue-400/10 bg-blue-400/5 p-3 text-sm text-slate-300">{skill}</div>
+              {displayedSkills.map((skill) => (
+                <div key={skill.key} className="rounded-xl border border-blue-400/10 bg-blue-400/5 p-3 text-sm text-slate-300">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p>{skill.name}</p>
+                      {"proficiency" in skill && skill.proficiency ? <p className="mt-1 text-xs text-blue-200">Proficiency {skill.proficiency}/5</p> : null}
+                    </div>
+                    {agent.databaseId && skill.id ? (
+                      <form action={removeAgentSkillAction}>
+                        <input type="hidden" name="agentKey" value={agent.id} />
+                        <input type="hidden" name="agentId" value={agent.databaseId} />
+                        <input type="hidden" name="skillId" value={skill.id} />
+                        <button type="submit" className="text-xs text-slate-500 transition hover:text-rose-200">Remove</button>
+                      </form>
+                    ) : null}
+                  </div>
+                </div>
               ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold">Skill catalogue mapping</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Create reusable organisation skills, then map them to this agent with a proficiency level.</p>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <form action={createSkillAction} className="space-y-3 rounded-xl border border-white/7 bg-black/10 p-4">
+                <input type="hidden" name="agentKey" value={agent.id} />
+                <label className="block text-sm text-slate-400">
+                  Skill name
+                  <input name="name" required className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Skill key
+                  <input name="key" placeholder="generated from name if blank" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Description
+                  <textarea name="description" rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <button type="submit" className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/7">Add skill</button>
+              </form>
+
+              <form action={assignAgentSkillAction} className="space-y-3 rounded-xl border border-white/7 bg-black/10 p-4">
+                <input type="hidden" name="agentKey" value={agent.id} />
+                <input type="hidden" name="agentId" value={agent.databaseId ?? ""} />
+                <label className="block text-sm text-slate-400">
+                  Catalogue skill
+                  <select name="skillId" required className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50">
+                    {skills.map((skill) => (
+                      <option key={skill.key} value={skill.id ?? skill.key}>
+                        {skill.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Proficiency
+                  <select name="proficiency" defaultValue="3" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <option key={level} value={level}>
+                        {level}/5
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500">Map skill</button>
+              </form>
             </div>
           </section>
 
@@ -152,8 +252,35 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               <p className="mt-3 text-sm leading-6 text-slate-300">Confirm or replace this persona before enabling live agent execution.</p>
             </section>
           )}
+
+          <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold">Version history</h2>
+            <div className="mt-4 space-y-3">
+              {versions.length ? (
+                versions.map((version) => (
+                  <div key={version.id} className="rounded-xl border border-white/7 bg-black/10 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="font-mono text-xs text-blue-200">v{version.version}</p>
+                      <p className="text-xs text-slate-500">{new Date(version.createdAt).toLocaleString("en-GB")}</p>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-300">{version.changeSummary}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-slate-500">No version records yet. The next live edit will create one.</p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+        <h2 className="font-semibold">Edit profile</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Live saves update the tenant-owned profile, increment the version, persist a snapshot, and emit an audit event.</p>
+        <div className="mt-6">
+          <AgentProfileForm agent={agent} action={updateAgentAction} submitLabel="Save profile version" />
+        </div>
+      </section>
     </>
   );
 }

@@ -3,8 +3,26 @@ import { z } from "zod";
 const nonEmptyString = z.string().trim().min(1);
 const stringList = z.array(nonEmptyString);
 
+export const agentSkillSchema = z.object({
+  id: nonEmptyString.optional(),
+  key: nonEmptyString,
+  name: nonEmptyString,
+  description: z.string().trim().optional(),
+  proficiency: z.number().int().min(1).max(5).optional(),
+});
+
+export const agentVersionSchema = z.object({
+  id: nonEmptyString,
+  agentId: nonEmptyString,
+  version: z.number().int().positive(),
+  changeSummary: nonEmptyString,
+  createdBy: nonEmptyString.optional(),
+  createdAt: nonEmptyString,
+});
+
 export const agentProfileSchema = z.object({
   id: nonEmptyString,
+  databaseId: nonEmptyString.optional(),
   name: nonEmptyString,
   jobTitle: nonEmptyString,
   department: nonEmptyString,
@@ -16,6 +34,7 @@ export const agentProfileSchema = z.object({
   status: nonEmptyString,
   profileStatus: nonEmptyString,
   autonomyLevel: z.number().int().min(0).max(5),
+  version: z.number().int().positive().optional(),
   initials: nonEmptyString,
   accent: nonEmptyString,
   avatarPath: z.string().startsWith("/").optional(),
@@ -27,6 +46,7 @@ export const agentProfileSchema = z.object({
   personalDetail: nonEmptyString.optional(),
   signatureHabit: nonEmptyString.optional(),
   skills: stringList,
+  skillDetails: z.array(agentSkillSchema).optional(),
   tools: stringList,
   requiresApproval: stringList,
 });
@@ -67,6 +87,8 @@ export const taskRecordsSchema = z.array(taskRecordSchema);
 export const approvalRecordsSchema = z.array(approvalRecordSchema);
 
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
+export type AgentSkill = z.infer<typeof agentSkillSchema>;
+export type AgentVersion = z.infer<typeof agentVersionSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 export type TaskRecord = z.infer<typeof taskRecordSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;

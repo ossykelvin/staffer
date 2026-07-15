@@ -31,19 +31,23 @@ The current app shows the shape of that product, but most screens are still stat
 - [x] PB-012: Replace JSON reads with live repositories for agents, tasks, workflows, and approvals. Updated page/API data access to repository functions while retaining seed data for fallback/static params; verified with lint, typecheck, build, and smoke checks.
 - [x] PB-013: Add audit events for task state changes, approval decisions, and material mutations. Implemented audit RPC, task transition server action, and approval decision server action that record demo/live audit results; verified statically and through task/approval smoke checks.
 - [x] PB-013A: Complete Phase 1 identity operations. Added password reset/update flow, organisation settings UI, admin invitation creation, invite acceptance, encrypted integration secret storage, Staffer Data API exposure, and live Supabase verification.
+- [x] PB-014: Agent profile CRUD foundation. Added `/agents/new`, editable agent detail forms, server-side create/update/status actions, profile lifecycle controls, audit events, and live Supabase persistence.
+- [x] PB-015: Agent versioning. Added append-only `staffer.agent_versions`, version snapshots for profile/status/skill changes, visible version history, and live RLS/grant verification.
+- [x] PB-016: Skills catalogue and agent-skill proficiency mapping. Added organisation skill creation, catalogue reads, agent skill map/remove flows, proficiency levels, and stricter same-tenant junction policies.
 
 ### Later: build the governed AI workforce
 
-- [ ] PB-014: Implement editable, versioned agent profiles and permissions.
-- [ ] PB-015: Implement task comments, dependencies, watchers, retries, and evidence timelines.
-- [ ] PB-016: Implement the approval policy engine and exact-payload execution checks.
-- [ ] PB-017: Implement the server-only AI provider router with fallback, guardrails, and structured output.
-- [ ] PB-018: Implement the tool registry with server-enforced permissions.
-- [ ] PB-019: Implement durable workflow execution, pause, resume, retry, and replay.
-- [ ] PB-020: Implement knowledge ingestion, retrieval, citations, retention, and access control.
-- [ ] PB-021: Launch the first live workflow: Customer Support Triage.
-- [ ] PB-022: Launch the second live workflow: Feature Intake to Engineering.
-- [ ] PB-023: Add governance dashboards for audit, cost, quality, latency, and failures.
+- [ ] PB-017: Implement tools catalogue and agent-tool permission mapping.
+- [ ] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step limits.
+- [ ] PB-019: Add profile image upload or generated-avatar support and founder confirmation workflow for draft personas.
+- [ ] PB-020: Implement task comments, dependencies, watchers, retries, and evidence timelines.
+- [ ] PB-021: Implement the approval policy engine and exact-payload execution checks.
+- [ ] PB-022: Implement the server-only AI provider router with fallback, guardrails, and structured output.
+- [ ] PB-023: Implement durable workflow execution, pause, resume, retry, and replay.
+- [ ] PB-024: Implement knowledge ingestion, retrieval, citations, retention, and access control.
+- [ ] PB-025: Launch the first live workflow: Customer Support Triage.
+- [ ] PB-026: Launch the second live workflow: Feature Intake to Engineering.
+- [ ] PB-027: Add governance dashboards for audit, cost, quality, latency, and failures.
 
 ## Ready backlog
 
