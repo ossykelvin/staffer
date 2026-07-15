@@ -4,6 +4,7 @@ const requiredFiles = [
   "supabase/migrations/20260715082325_staffer_live_foundation.sql",
   "supabase/migrations/20260715183241_phase2_agent_registry_skills.sql",
   "supabase/migrations/20260715184936_phase2_tool_registry_permissions.sql",
+  "supabase/migrations/20260715191154_phase2_agent_guardrails.sql",
   "src/proxy.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
@@ -65,6 +66,15 @@ const requiredToolRegistrySql = [
   "t.organisation_id = a.organisation_id",
 ];
 
+const requiredAgentGuardrailsSql = [
+  "maximum_input_tokens",
+  "maximum_output_tokens",
+  "prohibited_actions",
+  "approval_rules",
+  "agents_prohibited_actions_array",
+  "agents_approval_rules_array",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -99,6 +109,13 @@ for (const phrase of requiredToolRegistrySql) {
   }
 }
 
+const agentGuardrailsSql = readFileSync("supabase/migrations/20260715191154_phase2_agent_guardrails.sql", "utf8").toLowerCase();
+for (const phrase of requiredAgentGuardrailsSql) {
+  if (!agentGuardrailsSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required agent guardrails SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
 for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
@@ -107,7 +124,7 @@ for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTo
 }
 
 const agentActions = readFileSync("src/app/agents/actions.ts", "utf8");
-for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "createToolAction", "assignAgentToolAction", "removeAgentToolAction", "agent.skill_mapped", "agent.tool_mapped"]) {
+for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "createToolAction", "assignAgentToolAction", "removeAgentToolAction", "agent.skill_mapped", "agent.tool_mapped", "maximum_input_tokens", "prohibited_actions", "approval_rules"]) {
   if (!agentActions.includes(phrase)) {
     throw new Error(`Missing agent registry action phrase: ${phrase}`);
   }
@@ -119,7 +136,7 @@ if (!taskAction.includes("task.status_changed")) {
 }
 
 const settingsActions = readFileSync("src/app/settings/actions.ts", "utf8");
-for (const phrase of ["createInvitationAction", "storeIntegrationSecretAction", "encryptIntegrationSecret", "organisation.settings_updated"]) {
+for (const phrase of ["createInvitationAction", "storeIntegrationSecretAction", "encryptIntegrationSecret", "organisation.settings_updated", "default_autonomy_level", "default_maximum_steps", "default_input_token_limit", "default_output_token_limit"]) {
   if (!settingsActions.includes(phrase)) {
     throw new Error(`Missing settings action phrase: ${phrase}`);
   }

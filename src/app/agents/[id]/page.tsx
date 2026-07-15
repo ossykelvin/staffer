@@ -37,6 +37,14 @@ export default async function AgentDetailPage({
   const displayedTools = agent.toolDetails?.length
     ? agent.toolDetails
     : agent.tools.map((tool) => ({ key: tool, name: tool, id: undefined, riskClass: 1, requiresApproval: false, isActive: true, constraints: undefined }));
+  const runtimeLimits = [
+    { label: "Primary model", value: agent.primaryModel ?? "Organisation default" },
+    { label: "Fallback model", value: agent.fallbackModel ?? "Organisation default" },
+    { label: "Maximum steps", value: agent.maximumSteps ? String(agent.maximumSteps) : "Organisation default" },
+    { label: "Maximum cost", value: agent.maximumCostUsd !== undefined ? `$${agent.maximumCostUsd}` : "Organisation default" },
+    { label: "Input tokens", value: agent.maximumInputTokens ? String(agent.maximumInputTokens) : "Organisation default" },
+    { label: "Output tokens", value: agent.maximumOutputTokens ? String(agent.maximumOutputTokens) : "Organisation default" },
+  ];
 
   return (
     <>
@@ -158,6 +166,18 @@ export default async function AgentDetailPage({
               ))}
             </div>
           </div>
+
+          <div className="mt-7 border-t border-white/7 pt-6">
+            <p className="text-xs uppercase tracking-wider text-slate-600">Runtime guardrails</p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              {runtimeLimits.map((limit) => (
+                <div key={limit.label} className="rounded-xl border border-white/7 bg-black/10 p-3">
+                  <dt className="text-xs text-slate-600">{limit.label}</dt>
+                  <dd className="mt-1 break-all text-slate-300">{limit.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </section>
 
         <div className="space-y-6">
@@ -266,11 +286,42 @@ export default async function AgentDetailPage({
             </div>
             <div className="rounded-2xl border border-amber-400/12 bg-amber-400/[0.035] p-6">
               <h2 className="font-semibold text-amber-200">Approval boundaries</h2>
-              <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
-                {agent.requiresApproval.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+              {agent.requiresApproval.length ? (
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
+                  {agent.requiresApproval.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-slate-500">No legacy approval notes configured.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-rose-400/12 bg-rose-400/[0.035] p-6">
+              <h2 className="font-semibold text-rose-200">Prohibited actions</h2>
+              {agent.prohibitedActions?.length ? (
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
+                  {agent.prohibitedActions.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-slate-500">No explicit prohibited actions configured for this agent.</p>
+              )}
+            </div>
+            <div className="rounded-2xl border border-cyan-400/12 bg-cyan-400/[0.035] p-6">
+              <h2 className="font-semibold text-cyan-200">Approval rules</h2>
+              {agent.approvalRules?.length ? (
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
+                  {agent.approvalRules.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-slate-500">No per-agent approval rules configured yet.</p>
+              )}
             </div>
           </section>
 

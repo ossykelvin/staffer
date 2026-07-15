@@ -15,6 +15,29 @@ type AdminContext = {
   organisationId: string;
 };
 
+type AgentPayload = {
+  organisation_id: string;
+  key: string;
+  name: string;
+  job_title: string;
+  department: string;
+  biography: string;
+  profile: Record<string, unknown>;
+  autonomy_level: number;
+  status: string;
+  version: number;
+  created_by: string;
+  updated_at: string;
+  primary_model: string | null;
+  fallback_model: string | null;
+  maximum_cost_usd: number | null;
+  maximum_input_tokens: number | null;
+  maximum_output_tokens: number | null;
+  prohibited_actions: string[];
+  approval_rules: string[];
+  maximum_steps?: number;
+};
+
 function slugifyKey(value: string) {
   return value
     .trim()
@@ -37,6 +60,34 @@ function textList(formData: FormData, key: string) {
 function intValue(formData: FormData, key: string, fallback: number) {
   const parsed = Number.parseInt(text(formData, key), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function optionalPositiveInt(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${key} must be a positive whole number.`);
+  }
+
+  return parsed;
+}
+
+function optionalNonNegativeNumber(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${key} must be zero or greater.`);
+  }
+
+  return parsed;
 }
 
 function booleanValue(formData: FormData, key: string) {
@@ -102,7 +153,7 @@ async function requireAdminContext(): Promise<AdminContext> {
   return { supabase, user, organisationId: String(membership.organisation_id) };
 }
 
-function buildAgentPayload(formData: FormData, organisationId: string, userId: string, version: number) {
+function buildAgentPayload(formData: FormData, organisationId: string, userId: string, version: number): AgentPayload {
   const name = text(formData, "name");
   const key = slugifyKey(text(formData, "key") || name);
   const jobTitle = text(formData, "jobTitle");
@@ -112,6 +163,10 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
   const autonomyLevel = Math.min(5, Math.max(0, intValue(formData, "autonomyLevel", 1)));
   const experienceYears = Math.max(0, intValue(formData, "experienceYears", 0));
   const avatarPath = text(formData, "avatarPath");
+  const maximumSteps = optionalPositiveInt(formData, "maximumSteps");
+  const maximumCostUsd = optionalNonNegativeNumber(formData, "maximumCostUsd");
+  const maximumInputTokens = optionalPositiveInt(formData, "maximumInputTokens");
+  const maximumOutputTokens = optionalPositiveInt(formData, "maximumOutputTokens");
 
   if (!name || !key || !jobTitle || !department || !summary) {
     throw new Error("Name, key, job title, department and biography are required.");
@@ -125,7 +180,7 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
     throw new Error("Avatar path must start with / or be left blank.");
   }
 
-  const profile = {
+  const profile: Record<string, unknown> = {
     pronouns: text(formData, "pronouns") || "they/them",
     location: text(formData, "location") || "Configured by organisation",
     timezone: text(formData, "timezone") || "Configured by organisation",
@@ -144,7 +199,7 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
     requiresApproval: textList(formData, "requiresApproval"),
   };
 
-  return {
+  const payload: AgentPayload = {
     organisation_id: organisationId,
     key,
     name,
@@ -157,7 +212,20 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
     version,
     created_by: userId,
     updated_at: new Date().toISOString(),
+    primary_model: text(formData, "primaryModel") || null,
+    fallback_model: text(formData, "fallbackModel") || null,
+    maximum_cost_usd: maximumCostUsd ?? null,
+    maximum_input_tokens: maximumInputTokens ?? null,
+    maximum_output_tokens: maximumOutputTokens ?? null,
+    prohibited_actions: textList(formData, "prohibitedActions"),
+    approval_rules: textList(formData, "approvalRules"),
   };
+
+  if (maximumSteps) {
+    payload.maximum_steps = maximumSteps;
+  }
+
+  return payload;
 }
 
 async function recordAgentVersion(context: AdminContext, agent: Record<string, unknown>, changeSummary: string) {

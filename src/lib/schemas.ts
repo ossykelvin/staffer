@@ -46,6 +46,12 @@ export const agentProfileSchema = z.object({
   profileStatus: nonEmptyString,
   autonomyLevel: z.number().int().min(0).max(5),
   version: z.number().int().positive().optional(),
+  primaryModel: z.string().trim().optional(),
+  fallbackModel: z.string().trim().optional(),
+  maximumSteps: z.number().int().positive().optional(),
+  maximumCostUsd: z.number().nonnegative().optional(),
+  maximumInputTokens: z.number().int().positive().optional(),
+  maximumOutputTokens: z.number().int().positive().optional(),
   initials: nonEmptyString,
   accent: nonEmptyString,
   avatarPath: z.string().startsWith("/").optional(),
@@ -61,6 +67,8 @@ export const agentProfileSchema = z.object({
   tools: stringList,
   toolDetails: z.array(agentToolSchema).optional(),
   requiresApproval: stringList,
+  prohibitedActions: stringList.optional(),
+  approvalRules: stringList.optional(),
 });
 
 export const workflowDefinitionSchema = z.object({

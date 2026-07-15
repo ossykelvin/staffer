@@ -10,7 +10,14 @@ type OrganisationRow = {
   name: string;
   slug: string;
   timezone: string;
-  settings: { approval_mode?: string } | null;
+  settings: {
+    approval_mode?: string;
+    default_autonomy_level?: number;
+    default_maximum_steps?: number;
+    default_maximum_cost_usd?: number;
+    default_input_token_limit?: number;
+    default_output_token_limit?: number;
+  } | null;
 };
 
 type MembershipRow = {
@@ -168,6 +175,75 @@ export default async function SettingsPage({
                   <option value="demo_safe">Demo-safe no external execution</option>
                 </select>
               </label>
+              <div className="rounded-2xl border border-white/8 bg-black/10 p-5">
+                <h3 className="font-semibold text-slate-200">Default agent guardrails</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Blank values stay unset and let each agent or runtime policy decide. These defaults are tenant settings, not hardcoded execution rules.
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="block text-sm text-slate-400">
+                    Default autonomy level
+                    <select
+                      name="defaultAutonomyLevel"
+                      defaultValue={data.organisation?.settings?.default_autonomy_level ?? ""}
+                      disabled={!isAdmin && !isDemoMode()}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">Unset</option>
+                      {[0, 1, 2, 3, 4, 5].map((level) => (
+                        <option key={level} value={level}>
+                          Level {level}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-400">
+                    Default maximum steps
+                    <input
+                      name="defaultMaximumSteps"
+                      type="number"
+                      min={1}
+                      defaultValue={data.organisation?.settings?.default_maximum_steps}
+                      disabled={!isAdmin && !isDemoMode()}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="block text-sm text-slate-400">
+                    Default maximum cost USD
+                    <input
+                      name="defaultMaximumCostUsd"
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      defaultValue={data.organisation?.settings?.default_maximum_cost_usd}
+                      disabled={!isAdmin && !isDemoMode()}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="block text-sm text-slate-400">
+                    Default input token limit
+                    <input
+                      name="defaultInputTokenLimit"
+                      type="number"
+                      min={1}
+                      defaultValue={data.organisation?.settings?.default_input_token_limit}
+                      disabled={!isAdmin && !isDemoMode()}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="block text-sm text-slate-400 md:col-span-2">
+                    Default output token limit
+                    <input
+                      name="defaultOutputTokenLimit"
+                      type="number"
+                      min={1}
+                      defaultValue={data.organisation?.settings?.default_output_token_limit}
+                      disabled={!isAdmin && !isDemoMode()}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                </div>
+              </div>
               <button disabled={!isAdmin && !isDemoMode()} type="submit" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
                 Save settings
               </button>

@@ -35,10 +35,10 @@ The current app shows the shape of that product, but most screens are still stat
 - [x] PB-015: Agent versioning. Added append-only `staffer.agent_versions`, version snapshots for profile/status/skill changes, visible version history, and live RLS/grant verification.
 - [x] PB-016: Skills catalogue and agent-skill proficiency mapping. Added organisation skill creation, catalogue reads, agent skill map/remove flows, proficiency levels, and stricter same-tenant junction policies.
 - [x] PB-017: Tools catalogue and agent-tool permission mapping. Added organisation tool creation, catalogue reads, risk/approval/schema fields, per-agent tool map/remove flows with JSON constraints, version snapshots, audit events, and stricter same-tenant junction policies.
+- [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step limits. Added organisation guardrail defaults, per-agent runtime routing and limits, prohibited actions, approval rules, live schema constraints, audit-aware settings updates, and static/live verification.
 
 ### Later: build the governed AI workforce
 
-- [ ] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step limits.
 - [ ] PB-019: Add profile image upload or generated-avatar support and founder confirmation workflow for draft personas.
 - [ ] PB-020: Implement task comments, dependencies, watchers, retries, and evidence timelines.
 - [ ] PB-021: Implement the approval policy engine and exact-payload execution checks.

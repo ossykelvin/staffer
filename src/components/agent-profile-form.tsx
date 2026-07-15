@@ -133,14 +133,31 @@ export function AgentProfileForm({ agent, action, submitLabel }: AgentProfileFor
         </label>
       </div>
 
+      <section className="rounded-2xl border border-white/8 bg-black/10 p-5">
+        <h3 className="font-semibold text-slate-200">Runtime routing and limits</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Leave fields blank to use organisation or database defaults. Model identifiers are stored as mutable configuration, not hardcoded in UI logic.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Primary model key" name="primaryModel" defaultValue={agent?.primaryModel} />
+          <Field label="Fallback model key" name="fallbackModel" defaultValue={agent?.fallbackModel} />
+          <Field label="Maximum steps" name="maximumSteps" type="number" min={1} defaultValue={agent?.maximumSteps} />
+          <Field label="Maximum cost USD" name="maximumCostUsd" type="number" min={0} defaultValue={agent?.maximumCostUsd} />
+          <Field label="Maximum input tokens" name="maximumInputTokens" type="number" min={1} defaultValue={agent?.maximumInputTokens} />
+          <Field label="Maximum output tokens" name="maximumOutputTokens" type="number" min={1} defaultValue={agent?.maximumOutputTokens} />
+        </div>
+      </section>
+
       <TextArea label="Biography / summary" name="summary" defaultValue={agent?.summary} required />
       <TextArea label="Personality traits" name="personality" defaultValue={listValue(agent?.personality)} help="One per line or comma-separated." />
       <TextArea label="Communication style" name="communicationStyle" defaultValue={agent?.communicationStyle} required rows={3} />
       <TextArea label="Background" name="background" defaultValue={agent?.background} />
       <TextArea label="Human detail" name="personalDetail" defaultValue={agent?.personalDetail} rows={3} />
       <TextArea label="Working habit" name="signatureHabit" defaultValue={agent?.signatureHabit} rows={3} />
-      <TextArea label="Permitted tool keys" name="tools" defaultValue={listValue(agent?.tools)} help="One per line or comma-separated. Tool registry enforcement comes in the next Phase 2 slice." />
+      <TextArea label="Legacy permitted tool notes" name="tools" defaultValue={listValue(agent?.tools)} help="One per line or comma-separated. Enforced permissions are managed through the tool catalogue mappings." />
       <TextArea label="Approval boundaries" name="requiresApproval" defaultValue={listValue(agent?.requiresApproval)} />
+      <TextArea label="Prohibited actions" name="prohibitedActions" defaultValue={listValue(agent?.prohibitedActions)} help="One per line or comma-separated. These are explicit actions the agent cannot perform." />
+      <TextArea label="Approval rules" name="approvalRules" defaultValue={listValue(agent?.approvalRules)} help="One per line or comma-separated. These are evaluated before protected actions." />
       {agent ? <TextArea label="Change summary" name="changeSummary" defaultValue="Profile edited by administrator." rows={2} required /> : null}
 
       <button type="submit" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500">

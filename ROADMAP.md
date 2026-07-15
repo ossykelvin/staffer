@@ -27,6 +27,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-015: Agent versioning — added append-only `staffer.agent_versions`, version snapshots for create/edit/activate/retire/skill mapping changes and visible version history on agent detail pages; verified live RLS and authenticated grants
 - [x] PB-016: Skills catalogue and mapping — added live skills catalogue reads, skill creation, agent-skill proficiency mapping/removal and tightened cross-tenant junction policies; verified no duplicate permissive Staffer policies for touched tables
 - [x] PB-017: Tools catalogue and agent-tool permission mapping — added live tool catalogue reads, tool creation with risk/approval/schema fields, agent-tool mapping/removal with JSON constraints, version snapshots and stricter same-tenant junction policies
+- [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step/token limits — added organisation default guardrail settings, per-agent runtime routing/limits, prohibited actions and approval rules with live migration `phase2_agent_guardrails`
 
 ## Current first-draft scope
 
@@ -64,9 +65,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Store biography, pronouns, location, timezone, experience, personality and communication style — editable profile form persists these fields in the tenant-owned `agents.profile` JSON with validated server actions and demo fallback
 - [x] Create skills catalogue and agent-skill proficiency mapping — skills can be created per organisation and mapped to agents through `agent_skills` with proficiency levels and tenant-safe RLS policies
 - [x] Create tools catalogue and agent-tool permission mapping — tools can be created per organisation with risk class, input/output schemas, default approval requirements and active state, then mapped to agents through tenant-safe `agent_tools` constraints
-- [ ] Configure autonomy levels 0–5 with organisation defaults
-- [ ] Configure prohibited actions and approval rules per agent
-- [ ] Add model, step, token and cost limits per agent
+- [x] Configure autonomy levels 0–5 with organisation defaults — editable organisation defaults now live in `organisations.settings` and preserve other settings during updates
+- [x] Configure prohibited actions and approval rules per agent — `agents.prohibited_actions` and `agents.approval_rules` are editable arrays with database JSON-array constraints
+- [x] Add model, step, token and cost limits per agent — agent forms and detail pages now cover model keys plus step, cost, input-token and output-token ceilings
 - [ ] Add agent version history and rollback
 - [ ] Add profile image upload or generated-avatar option
 - [ ] Add founder confirmation workflow for draft personas

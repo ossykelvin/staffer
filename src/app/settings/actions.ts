@@ -23,6 +23,65 @@ function redirectToSettings(search: URLSearchParams): never {
   redirect(`/settings?${search.toString()}`);
 }
 
+function text(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+function optionalAutonomyLevel(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 5) {
+    throw new Error(`${key} must be a whole number from 0 to 5.`);
+  }
+
+  return parsed;
+}
+
+function optionalPositiveInt(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${key} must be a positive whole number.`);
+  }
+
+  return parsed;
+}
+
+function optionalNonNegativeNumber(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${key} must be zero or greater.`);
+  }
+
+  return parsed;
+}
+
+function asSettingsRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function setOptionalSetting(settings: Record<string, unknown>, key: string, value: number | undefined) {
+  if (value === undefined) {
+    delete settings[key];
+    return;
+  }
+
+  settings[key] = value;
+}
+
 async function getOrigin() {
   const requestHeaders = await headers();
   return requestHeaders.get("origin") ?? "http://localhost:3000";
@@ -90,15 +149,40 @@ export async function updateOrganisationSettingsAction(formData: FormData) {
       throw new Error("Live organisation context is unavailable.");
     }
 
+    const defaultAutonomyLevel = optionalAutonomyLevel(formData, "defaultAutonomyLevel");
+    const defaultMaximumSteps = optionalPositiveInt(formData, "defaultMaximumSteps");
+    const defaultMaximumCostUsd = optionalNonNegativeNumber(formData, "defaultMaximumCostUsd");
+    const defaultInputTokenLimit = optionalPositiveInt(formData, "defaultInputTokenLimit");
+    const defaultOutputTokenLimit = optionalPositiveInt(formData, "defaultOutputTokenLimit");
+
+    const { data: organisation, error: organisationError } = await context.supabase
+      .schema("staffer")
+      .from("organisations")
+      .select("settings")
+      .eq("id", context.organisationId)
+      .maybeSingle();
+
+    if (organisationError) {
+      throw new Error(organisationError.message);
+    }
+
+    const settings = {
+      ...asSettingsRecord(organisation?.settings),
+      approval_mode: approvalMode || "default",
+    };
+    setOptionalSetting(settings, "default_autonomy_level", defaultAutonomyLevel);
+    setOptionalSetting(settings, "default_maximum_steps", defaultMaximumSteps);
+    setOptionalSetting(settings, "default_maximum_cost_usd", defaultMaximumCostUsd);
+    setOptionalSetting(settings, "default_input_token_limit", defaultInputTokenLimit);
+    setOptionalSetting(settings, "default_output_token_limit", defaultOutputTokenLimit);
+
     const { error } = await context.supabase
       .schema("staffer")
       .from("organisations")
       .update({
         name,
         timezone: timezone || "Europe/London",
-        settings: {
-          approval_mode: approvalMode || "default",
-        },
+        settings,
         updated_at: new Date().toISOString(),
       })
       .eq("id", context.organisationId);
@@ -115,7 +199,16 @@ export async function updateOrganisationSettingsAction(formData: FormData) {
       entityType: "organisation",
       entityId: context.organisationId,
       summary: "Organisation settings were updated.",
-      details: { name, timezone, approvalMode },
+      details: {
+        name,
+        timezone,
+        approvalMode,
+        defaultAutonomyLevel,
+        defaultMaximumSteps,
+        defaultMaximumCostUsd,
+        defaultInputTokenLimit,
+        defaultOutputTokenLimit,
+      },
     });
 
     revalidatePath("/settings");

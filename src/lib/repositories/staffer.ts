@@ -21,6 +21,19 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
+function asOptionalNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
 function asProfile(record: JsonRecord) {
   return (record.profile && typeof record.profile === "object" ? record.profile : {}) as JsonRecord;
 }
@@ -96,6 +109,12 @@ function mapAgent(record: JsonRecord): AgentProfile {
     profileStatus: String(profile.profileStatus ?? "live"),
     autonomyLevel: Number(record.autonomy_level ?? 1),
     version: typeof record.version === "number" ? record.version : 1,
+    primaryModel: typeof record.primary_model === "string" ? record.primary_model : undefined,
+    fallbackModel: typeof record.fallback_model === "string" ? record.fallback_model : undefined,
+    maximumSteps: asOptionalNumber(record.maximum_steps),
+    maximumCostUsd: asOptionalNumber(record.maximum_cost_usd),
+    maximumInputTokens: asOptionalNumber(record.maximum_input_tokens),
+    maximumOutputTokens: asOptionalNumber(record.maximum_output_tokens),
     initials: String(profile.initials ?? String(record.name ?? "A").slice(0, 2).toUpperCase()),
     accent: String(profile.accent ?? "blue"),
     avatarPath: typeof profile.avatarPath === "string" ? profile.avatarPath : undefined,
@@ -111,6 +130,8 @@ function mapAgent(record: JsonRecord): AgentProfile {
     tools,
     toolDetails,
     requiresApproval: asStringArray(profile.requiresApproval),
+    prohibitedActions: asStringArray(record.prohibited_actions),
+    approvalRules: asStringArray(record.approval_rules),
   };
 }
 
