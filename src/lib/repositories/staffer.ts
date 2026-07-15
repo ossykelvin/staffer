@@ -15,6 +15,8 @@ import type {
   KnowledgeDocument,
   KnowledgeHubData,
   KnowledgeSearchResult,
+  SupportTriageCase,
+  SupportTriageData,
   TaskCollaboration,
   TaskDependency,
   TaskRecord,
@@ -332,6 +334,74 @@ function mapKnowledgeSearchResult(record: JsonRecord): KnowledgeSearchResult {
     excerpt: String(record.excerpt ?? ""),
     citation: asJsonObject(record.citation),
     rank: Number(record.rank ?? 0),
+  };
+}
+
+function mapSupportTriageCase(record: JsonRecord): SupportTriageCase {
+  const task = asNestedRecord(record.tasks);
+
+  return {
+    id: String(record.id),
+    taskId: String(record.task_id),
+    taskReference: task ? String(task.reference ?? record.task_id) : undefined,
+    workflowRunId: typeof record.workflow_run_id === "string" ? record.workflow_run_id : null,
+    approvalId: typeof record.approval_id === "string" ? record.approval_id : null,
+    sourceType: String(record.source_type ?? "manual"),
+    customerName: typeof record.customer_name === "string" ? record.customer_name : null,
+    customerEmail: typeof record.customer_email === "string" ? record.customer_email : null,
+    subject: String(record.subject ?? "Support request"),
+    productArea: typeof record.product_area === "string" ? record.product_area : null,
+    category: String(record.category ?? "general"),
+    severity: String(record.severity ?? "medium"),
+    sentiment: String(record.sentiment ?? "neutral"),
+    onboardingState: String(record.onboarding_state ?? "unknown"),
+    slaTargetAt: typeof record.sla_target_at === "string" ? record.sla_target_at : null,
+    riskClass: Number(record.risk_class ?? 3),
+    classification: asJsonObject(record.classification),
+    knowledgeQuery: typeof record.knowledge_query === "string" ? record.knowledge_query : null,
+    citations: Array.isArray(record.citations) ? (record.citations as Record<string, unknown>[]) : [],
+    draftResponse: typeof record.draft_response === "string" ? record.draft_response : null,
+    draftStatus: String(record.draft_status ?? "not_started"),
+    escalationTargets: asStringArray(record.escalation_targets),
+    externalActionStatus: String(record.external_action_status ?? "pending_approval"),
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+    updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function demoSupportTriageData(): SupportTriageData {
+  const now = new Date().toISOString();
+
+  return {
+    cases: [
+      {
+        id: "demo-support-case-1",
+        taskId: "demo-task-support",
+        taskReference: "SUP-DEMO-001",
+        workflowRunId: "demo-support-run",
+        approvalId: "APR-221",
+        sourceType: "manual",
+        customerName: "Demo customer",
+        customerEmail: "customer@example.com",
+        subject: "Cannot access banking dashboard",
+        productArea: "Banking application",
+        category: "banking_application",
+        severity: "high",
+        sentiment: "negative",
+        onboardingState: "blocked",
+        slaTargetAt: now,
+        riskClass: 4,
+        classification: { mode: "demo", rationale: ["Banking and access language require specialist review."] },
+        knowledgeQuery: "banking application access blocked",
+        citations: [{ documentTitle: "Demo support source", excerpt: "Approved knowledge is cited before the draft is sent." }],
+        draftResponse: "Demo draft response pending human approval before customer-visible action.",
+        draftStatus: "needs_review",
+        escalationTargets: ["anna", "nakamura", "lawal"],
+        externalActionStatus: "approval_requested",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
   };
 }
 
@@ -990,6 +1060,32 @@ export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData>
   };
 }
 
+export async function getSupportTriageData(): Promise<SupportTriageData> {
+  const context = await getLiveContext();
+
+  if (!context?.organisationId) {
+    return demoSupportTriageData();
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("support_triage_cases")
+    .select(
+      "id, task_id, workflow_run_id, approval_id, source_type, customer_name, customer_email, subject, product_area, category, severity, sentiment, onboarding_state, sla_target_at, risk_class, classification, knowledge_query, citations, draft_response, draft_status, escalation_targets, external_action_status, created_at, updated_at, tasks(reference)",
+    )
+    .eq("organisation_id", context.organisationId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data) {
+    return demoSupportTriageData();
+  }
+
+  return {
+    cases: data.map((record) => mapSupportTriageCase(record as JsonRecord)),
+  };
+}
+
 export async function getWorkflows() {
   const context = await getLiveContext();
   if (!context?.organisationId) {
@@ -1003,7 +1099,7 @@ export async function getWorkflows() {
     .eq("organisation_id", context.organisationId)
     .order("name");
 
-  return error || !data ? demoWorkflows : data.map((record) => mapWorkflow(record as JsonRecord));
+  return error || !data || data.length === 0 ? demoWorkflows : data.map((record) => mapWorkflow(record as JsonRecord));
 }
 
 export async function getWorkflowById(id: string) {

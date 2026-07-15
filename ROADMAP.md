@@ -37,6 +37,8 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [x] PB-024: Knowledge ingestion, retrieval, citations, retention and access control — added live knowledge collections, document versions, chunking, citation search, retrieval audit events, agent collection ACLs, retention/review/legal-hold metadata and Knowledge Hub ingestion/search UI
 
+- [x] PB-025: Customer Support Triage live workflow — added tenant-owned support triage settings, manual intake, queued task creation, durable workflow start, Anna-style classification, approved knowledge retrieval, citation-backed draft response, specialist routing flags, approval request creation and workflow-console case tracking
+
 ## Current first-draft scope
 
 - [x] Next.js App Router application shell
@@ -171,16 +173,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 9 — First live workflows
 
 ### Customer Support Triage
-- [ ] Gmail event creates queued task
-- [ ] Anna classifies customer, product, category, severity, sentiment, onboarding state, and SLA
-- [ ] Retrieve approved knowledge and similar resolved cases
-- [ ] Anna performs approved first-line troubleshooting and drafts a professional, casual response with no unsupported commitments
-- [ ] Route banking-application, access, data, security, compliance, or critical-incident concerns to the correct specialist without exposing sensitive information
-- [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases
-- [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant
-- [ ] Human approves external send
-- [ ] Send or create draft based on organisation policy
-- [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement
+- [ ] Gmail event creates queued task — PB-025 added a manual intake path plus idempotent `source_message_id` support for Gmail events; Gmail connector ingestion remains open.
+- [x] Anna classifies customer, product, category, severity, sentiment, onboarding state, and SLA — PB-025 added settings-driven classification from support message content, product area and tenant severity/category rules.
+- [x] Retrieve approved knowledge and similar resolved cases — PB-025 calls the approved knowledge search RPC and stores retrieved citations on each support case; similar resolved-case retrieval remains a later enhancement.
+- [x] Anna performs approved first-line troubleshooting and drafts a professional, casual response with no unsupported commitments — PB-025 creates a citation-backed draft response and explicitly blocks customer-visible execution until approval.
+- [x] Route banking-application, access, data, security, compliance, or critical-incident concerns to the correct specialist without exposing sensitive information — PB-025 stores escalation targets from tenant routing rules for Anna, Nakamura and Lawal.
+- [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — PB-025 flags Nakamura review requirements; actual reviewer decision capture remains open.
+- [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — PB-025 flags Lawal review requirements; actual compliance review capture remains open.
+- [x] Human approves external send — PB-025 creates a pending approval with exact payload hash for the support draft before any customer-visible action can proceed.
+- [ ] Send or create draft based on organisation policy — PB-025 records the response policy and approval-gated draft payload; Gmail draft/send execution remains open.
+- [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — PB-025 records task evidence; Kristin documentation follow-up remains open.
 
 ### Feature Intake
 - [ ] Capture feedback from form, email or manual input

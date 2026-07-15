@@ -12,6 +12,7 @@
     "verify:approval-policy": "node scripts/verify-approval-policy.mjs",
     "verify:knowledge-ingestion": "node scripts/verify-knowledge-ingestion.mjs",
     "verify:workflow-execution": "node scripts/verify-workflow-execution.mjs",
+    "verify:customer-support-triage": "node scripts/verify-customer-support-triage.mjs",
     "verify:live-foundation": "node scripts/verify-live-foundation.mjs",
     "check": "npm run lint && npm run typecheck && npm run build"
   },

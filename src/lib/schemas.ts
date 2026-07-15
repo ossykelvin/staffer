@@ -258,6 +258,38 @@ export const knowledgeHubDataSchema = z.object({
   query: z.string(),
 });
 
+export const supportTriageCaseSchema = z.object({
+  id: nonEmptyString,
+  taskId: nonEmptyString,
+  taskReference: nonEmptyString.optional(),
+  workflowRunId: nonEmptyString.nullable().optional(),
+  approvalId: nonEmptyString.nullable().optional(),
+  sourceType: nonEmptyString,
+  customerName: z.string().trim().nullable().optional(),
+  customerEmail: z.string().trim().nullable().optional(),
+  subject: nonEmptyString,
+  productArea: z.string().trim().nullable().optional(),
+  category: nonEmptyString,
+  severity: nonEmptyString,
+  sentiment: nonEmptyString,
+  onboardingState: nonEmptyString,
+  slaTargetAt: z.string().trim().nullable().optional(),
+  riskClass: z.number().int().min(0).max(5),
+  classification: z.record(z.string(), z.unknown()),
+  knowledgeQuery: z.string().trim().nullable().optional(),
+  citations: z.array(z.record(z.string(), z.unknown())),
+  draftResponse: z.string().trim().nullable().optional(),
+  draftStatus: nonEmptyString,
+  escalationTargets: stringList,
+  externalActionStatus: nonEmptyString,
+  createdAt: nonEmptyString,
+  updatedAt: nonEmptyString,
+});
+
+export const supportTriageDataSchema = z.object({
+  cases: z.array(supportTriageCaseSchema),
+});
+
 export const approvalRecordSchema = z.object({
   id: nonEmptyString,
   title: nonEmptyString,
@@ -340,6 +372,8 @@ export type KnowledgeCollection = z.infer<typeof knowledgeCollectionSchema>;
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type KnowledgeSearchResult = z.infer<typeof knowledgeSearchResultSchema>;
 export type KnowledgeHubData = z.infer<typeof knowledgeHubDataSchema>;
+export type SupportTriageCase = z.infer<typeof supportTriageCaseSchema>;
+export type SupportTriageData = z.infer<typeof supportTriageDataSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
 export type ApprovalDetailRecord = z.infer<typeof approvalDetailRecordSchema>;

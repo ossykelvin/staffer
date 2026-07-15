@@ -9,6 +9,8 @@ const requiredFiles = [
   "supabase/migrations/20260715195016_phase7_approval_policy_engine.sql",
   "supabase/migrations/20260715203228_phase6_workflow_execution.sql",
   "supabase/migrations/20260715205737_phase8_knowledge_ingestion_retrieval.sql",
+  "supabase/migrations/20260715220229_phase9_customer_support_triage.sql",
+  "supabase/migrations/20260715221219_phase9_support_triage_indexes.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
   "src/lib/ai/provider.ts",
@@ -31,6 +33,7 @@ const requiredFiles = [
   "src/app/approvals/[id]/actions.ts",
   "src/app/tasks/[id]/actions.ts",
   "src/app/workflows/[id]/actions.ts",
+  "src/app/workflows/[id]/support-triage-actions.ts",
   "src/app/knowledge/actions.ts",
 ];
 
@@ -171,6 +174,17 @@ const requiredKnowledgeIngestionSql = [
   "legal_hold",
 ];
 
+const requiredSupportTriageSql = [
+  "create table if not exists staffer.support_triage_settings",
+  "create table if not exists staffer.support_triage_cases",
+  "alter table staffer.support_triage_settings enable row level security",
+  "alter table staffer.support_triage_cases enable row level security",
+  "create policy support_triage_cases_operator_insert",
+  "create or replace function staffer.ensure_support_triage_settings",
+  "create or replace function staffer.ensure_support_triage_workflow",
+  "support_triage_cases_external_action_status_check",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -240,8 +254,15 @@ for (const phrase of requiredKnowledgeIngestionSql) {
   }
 }
 
+const supportTriageSql = readFileSync("supabase/migrations/20260715220229_phase9_customer_support_triage.sql", "utf8").toLowerCase();
+for (const phrase of requiredSupportTriageSql) {
+  if (!supportTriageSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required support triage SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getKnowledgeHubData", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getKnowledgeHubData", "getSupportTriageData", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
@@ -286,6 +307,13 @@ const workflowActions = readFileSync("src/app/workflows/[id]/actions.ts", "utf8"
 for (const phrase of ["startWorkflowRunAction", "transitionWorkflowRunAction", "replayWorkflowRunAction", "start_workflow_run", "transition_workflow_run", "replay_workflow_run", "workflow.run_started", "workflow.replay_requested"]) {
   if (!workflowActions.includes(phrase)) {
     throw new Error(`Missing workflow execution action phrase: ${phrase}`);
+  }
+}
+
+const supportTriageActions = readFileSync("src/app/workflows/[id]/support-triage-actions.ts", "utf8");
+for (const phrase of ["startSupportTriageAction", "ensure_support_triage_workflow", "search_knowledge_chunks", "approval_payload_hash", "support_triage_cases", "support_triage.case_created"]) {
+  if (!supportTriageActions.includes(phrase)) {
+    throw new Error(`Missing support triage action phrase: ${phrase}`);
   }
 }
 

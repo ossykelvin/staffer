@@ -12,6 +12,8 @@ export type {
   KnowledgeDocument,
   KnowledgeHubData,
   KnowledgeSearchResult,
+  SupportTriageCase,
+  SupportTriageData,
   TaskCollaboration,
   TaskComment,
   TaskDependency,

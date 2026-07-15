@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { replayWorkflowRunAction, startWorkflowRunAction, transitionWorkflowRunAction } from "@/app/workflows/[id]/actions";
+import { startSupportTriageAction } from "@/app/workflows/[id]/support-triage-actions";
 import { workflows } from "@/lib/data";
 import { getWorkflowDryRun } from "@/lib/demo-details";
-import { getWorkflowById, getWorkflowExecutionDetail } from "@/lib/repositories/staffer";
+import { getSupportTriageData, getWorkflowById, getWorkflowExecutionDetail } from "@/lib/repositories/staffer";
 
 export function generateStaticParams() {
   return workflows.map((workflow) => ({ id: workflow.id }));
@@ -28,6 +29,7 @@ export default async function WorkflowDetailPage({
 
   const dryRun = getWorkflowDryRun(workflow);
   const execution = await getWorkflowExecutionDetail(id);
+  const supportTriage = id === "support-triage" ? await getSupportTriageData() : null;
   const latestRun = execution.latestRun;
   const latestSteps = latestRun?.steps ?? [];
   const latestEvents = latestRun?.events ?? [];
@@ -150,6 +152,54 @@ export default async function WorkflowDetailPage({
           </div>
         </aside>
         <div className="space-y-6">
+          {supportTriage ? (
+            <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/8 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">PB-025 live workflow</p>
+                  <h2 className="mt-2 font-semibold text-white">Customer support intake</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                    Create a governed support case. Staffer queues a task, starts the durable workflow, classifies the request, searches approved knowledge, drafts Anna&apos;s response, routes specialist review, and opens approval before any customer-visible action.
+                  </p>
+                </div>
+                <StatusBadge value="Approval gated" />
+              </div>
+              <form action={startSupportTriageAction} className="mt-6 grid gap-4 lg:grid-cols-2">
+                <input type="hidden" name="workflowKey" value={workflow.id} />
+                <input type="hidden" name="sourceType" value="manual" />
+                <label className="text-sm text-slate-300">
+                  Customer name
+                  <input name="customerName" placeholder="Customer or company name" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Customer email
+                  <input name="customerEmail" type="email" placeholder="customer@example.com" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Product area
+                  <input name="productArea" placeholder="Banking application, onboarding, API..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Source message id
+                  <input name="sourceMessageId" placeholder="Optional idempotency key from Gmail later" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Subject
+                  <input name="subject" required placeholder="Cannot access banking dashboard" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Message body
+                  <textarea name="messageBody" required rows={6} placeholder="Paste the customer message here..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-cyan-400" />
+                </label>
+                <div className="lg:col-span-2">
+                  <button className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
+                    Create governed support triage
+                  </button>
+                  <p className="mt-2 text-xs text-slate-500">Email sending is intentionally blocked. This creates a task, workflow run, citations, draft and approval request only.</p>
+                </div>
+              </form>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold text-white">Durable step ledger</h2>
             {latestSteps.length ? (
@@ -193,6 +243,61 @@ export default async function WorkflowDetailPage({
               <p className="mt-4 text-sm leading-6 text-slate-500">No events recorded for the latest run.</p>
             )}
           </div>
+          {supportTriage ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-semibold text-white">Recent support triage cases</h2>
+                <span className="text-xs text-slate-500">{supportTriage.cases.length} shown</span>
+              </div>
+              {supportTriage.cases.length ? (
+                <div className="mt-5 space-y-4">
+                  {supportTriage.cases.map((supportCase) => (
+                    <article key={supportCase.id} className="rounded-xl border border-white/8 bg-black/10 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-medium text-slate-200">{supportCase.subject}</h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {supportCase.customerName ?? "Unknown customer"} {supportCase.customerEmail ? `· ${supportCase.customerEmail}` : ""} · {new Date(supportCase.createdAt).toLocaleString("en-GB")}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusBadge value={supportCase.severity} />
+                          <StatusBadge value={supportCase.externalActionStatus} />
+                        </div>
+                      </div>
+                      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">Category</dt>
+                          <dd className="mt-1 text-slate-300">{supportCase.category.replace(/_/g, " ")}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">Escalation</dt>
+                          <dd className="mt-1 text-slate-300">{supportCase.escalationTargets.join(", ") || "anna"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">SLA</dt>
+                          <dd className="mt-1 text-slate-300">{supportCase.slaTargetAt ? new Date(supportCase.slaTargetAt).toLocaleString("en-GB") : "Not set"}</dd>
+                        </div>
+                      </dl>
+                      {supportCase.draftResponse ? (
+                        <div className="mt-4 rounded-lg border border-white/8 bg-white/[0.03] p-3">
+                          <p className="text-xs uppercase tracking-wider text-slate-600">Approval-gated draft</p>
+                          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-400">{supportCase.draftResponse}</p>
+                        </div>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
+                        {supportCase.taskReference ? <Link href={`/tasks/${supportCase.taskReference}`} className="text-blue-300 hover:text-blue-200">Open task</Link> : null}
+                        {supportCase.approvalId ? <Link href={`/approvals/${supportCase.approvalId}`} className="text-cyan-300 hover:text-cyan-200">Review approval</Link> : null}
+                        <span className="text-slate-600">{supportCase.citations.length} citations</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-slate-500">No live support triage cases yet. Use the intake form to create the first approval-gated support workflow.</p>
+              )}
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold text-white">Dry-run reference</h2>
             <ol className="mt-5 space-y-4">
