@@ -11,6 +11,10 @@ import type {
   ApprovalDetailRecord,
   ApprovalExecutionCheck,
   ApprovalRecord,
+  KnowledgeCollection,
+  KnowledgeDocument,
+  KnowledgeHubData,
+  KnowledgeSearchResult,
   TaskCollaboration,
   TaskDependency,
   TaskRecord,
@@ -274,6 +278,122 @@ function mapTaskDependency(record: JsonRecord, tasksById: Map<string, TaskRecord
     dependencyType: String(record.dependency_type ?? "blocks"),
     notes: typeof record.notes === "string" ? record.notes : undefined,
     createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapKnowledgeCollection(record: JsonRecord, counts: { documentCount?: number; chunkCount?: number; retrievalCount?: number; reviewDueCount?: number } = {}): KnowledgeCollection {
+  return {
+    id: String(record.id),
+    key: String(record.key ?? record.id),
+    name: String(record.name ?? record.key ?? "Knowledge collection"),
+    description: typeof record.description === "string" ? record.description : null,
+    sensitivity: String(record.sensitivity ?? "internal"),
+    accessMode: String(record.access_mode ?? "organisation"),
+    documentCount: counts.documentCount ?? 0,
+    chunkCount: counts.chunkCount ?? 0,
+    retrievalCount: counts.retrievalCount,
+    reviewDueCount: counts.reviewDueCount,
+    retentionDays: typeof record.retention_days === "number" ? record.retention_days : null,
+    reviewIntervalDays: typeof record.review_interval_days === "number" ? record.review_interval_days : null,
+  };
+}
+
+function mapKnowledgeDocument(record: JsonRecord): KnowledgeDocument {
+  const collection = asNestedRecord(record.knowledge_collections);
+
+  return {
+    id: String(record.id),
+    title: String(record.title ?? "Untitled document"),
+    collectionId: typeof record.collection_id === "string" ? record.collection_id : null,
+    collectionName: collection ? String(collection.name ?? collection.key ?? "Collection") : null,
+    sourceUrl: typeof record.source_url === "string" ? record.source_url : null,
+    sensitivity: String(record.sensitivity ?? "internal"),
+    status: String(record.status ?? "draft"),
+    version: Number(record.version ?? 1),
+    scanStatus: String(record.scan_status ?? "pending"),
+    extractionStatus: String(record.extraction_status ?? "pending"),
+    embeddingStatus: String(record.embedding_status ?? "not_requested"),
+    reviewDueAt: typeof record.review_due_at === "string" ? record.review_due_at : null,
+    retentionUntil: typeof record.retention_until === "string" ? record.retention_until : null,
+    legalHold: Boolean(record.legal_hold),
+    updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapKnowledgeSearchResult(record: JsonRecord): KnowledgeSearchResult {
+  return {
+    chunkId: String(record.chunk_id),
+    documentId: String(record.document_id),
+    collectionId: String(record.collection_id),
+    collectionKey: String(record.collection_key),
+    collectionName: String(record.collection_name),
+    documentTitle: String(record.document_title),
+    chunkIndex: Number(record.chunk_index ?? 1),
+    excerpt: String(record.excerpt ?? ""),
+    citation: asJsonObject(record.citation),
+    rank: Number(record.rank ?? 0),
+  };
+}
+
+function demoKnowledgeHubData(query = ""): KnowledgeHubData {
+  const collections = [
+    { key: "company-policies", name: "Company policies", documentCount: 3, chunkCount: 9, sensitivity: "internal", accessMode: "organisation" },
+    { key: "product-documentation", name: "Product documentation", documentCount: 4, chunkCount: 16, sensitivity: "internal", accessMode: "organisation" },
+    { key: "customer-support", name: "Customer support knowledge", documentCount: 5, chunkCount: 21, sensitivity: "restricted", accessMode: "restricted" },
+    { key: "architecture-decisions", name: "Architecture decisions", documentCount: 2, chunkCount: 7, sensitivity: "confidential", accessMode: "restricted" },
+  ].map((collection, index) =>
+    mapKnowledgeCollection(
+      {
+        id: `demo-collection-${index + 1}`,
+        key: collection.key,
+        name: collection.name,
+        sensitivity: collection.sensitivity,
+        access_mode: collection.accessMode,
+        retention_days: 365,
+        review_interval_days: 90,
+      },
+      { documentCount: collection.documentCount, chunkCount: collection.chunkCount, retrievalCount: index + 1, reviewDueCount: index === 2 ? 1 : 0 },
+    ),
+  );
+  const now = new Date().toISOString();
+  const documents: KnowledgeDocument[] = collections.slice(0, 3).map((collection, index) => ({
+    id: `demo-document-${index + 1}`,
+    title: `${collection.name} starter source`,
+    collectionId: collection.id,
+    collectionName: collection.name,
+    sourceUrl: null,
+    sensitivity: collection.sensitivity,
+    status: index === 2 ? "needs_review" : "approved",
+    version: 1,
+    scanStatus: "not_required",
+    extractionStatus: "completed",
+    embeddingStatus: "not_requested",
+    reviewDueAt: now,
+    retentionUntil: null,
+    legalHold: false,
+    updatedAt: now,
+  }));
+
+  return {
+    collections,
+    documents,
+    query,
+    searchResults: query
+      ? [
+          {
+            chunkId: "demo-chunk-1",
+            documentId: "demo-document-1",
+            collectionId: "demo-collection-1",
+            collectionKey: "company-policies",
+            collectionName: "Company policies",
+            documentTitle: "Company policies starter source",
+            chunkIndex: 1,
+            excerpt: `Demo citation-aware result for "${query}". Live search uses approved chunks and records retrieval evidence.`,
+            citation: { documentTitle: "Company policies starter source", chunkIndex: 1, mode: "demo" },
+            rank: 1,
+          },
+        ]
+      : [],
   };
 }
 
@@ -778,6 +898,95 @@ export async function getTaskCollaboration(taskReference: string): Promise<TaskC
     watchers: (watchersResult.data ?? []).map((record) => mapTaskWatcher(record as JsonRecord)),
     dependencies: dependencies.map((record) => mapTaskDependency(record, tasksById)),
     evidenceEvents: (evidenceResult.data ?? []).map((record) => mapTaskEvidenceEvent(record as JsonRecord)),
+  };
+}
+
+export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData> {
+  const context = await getLiveContext();
+  const trimmedQuery = query.trim();
+
+  if (!context?.organisationId) {
+    return demoKnowledgeHubData(trimmedQuery);
+  }
+
+  const [collectionsResult, documentsResult, chunksResult, retrievalsResult] = await Promise.all([
+    context.supabase
+      .schema("staffer")
+      .from("knowledge_collections")
+      .select("id, key, name, description, sensitivity, access_mode, retention_days, review_interval_days")
+      .eq("organisation_id", context.organisationId)
+      .eq("is_active", true)
+      .order("name"),
+    context.supabase
+      .schema("staffer")
+      .from("documents")
+      .select("id, title, collection_id, source_url, sensitivity, status, version, scan_status, extraction_status, embedding_status, review_due_at, retention_until, legal_hold, updated_at, created_at, knowledge_collections(name, key)")
+      .eq("organisation_id", context.organisationId)
+      .order("updated_at", { ascending: false })
+      .limit(12),
+    context.supabase
+      .schema("staffer")
+      .from("document_chunks")
+      .select("id, collection_id")
+      .eq("organisation_id", context.organisationId),
+    context.supabase
+      .schema("staffer")
+      .from("knowledge_retrieval_events")
+      .select("id")
+      .eq("organisation_id", context.organisationId)
+      .limit(1000),
+  ]);
+
+  if (collectionsResult.error || documentsResult.error) {
+    return demoKnowledgeHubData(trimmedQuery);
+  }
+
+  const documents = (documentsResult.data ?? []).map((record) => mapKnowledgeDocument(record as JsonRecord));
+  const documentsByCollection = new Map<string, number>();
+  const reviewDueByCollection = new Map<string, number>();
+  for (const document of documents) {
+    if (!document.collectionId) {
+      continue;
+    }
+    documentsByCollection.set(document.collectionId, (documentsByCollection.get(document.collectionId) ?? 0) + 1);
+    if (document.reviewDueAt && new Date(document.reviewDueAt) <= new Date()) {
+      reviewDueByCollection.set(document.collectionId, (reviewDueByCollection.get(document.collectionId) ?? 0) + 1);
+    }
+  }
+
+  const chunksByCollection = new Map<string, number>();
+  for (const chunk of chunksResult.data ?? []) {
+    const collectionId = typeof chunk.collection_id === "string" ? chunk.collection_id : "";
+    if (collectionId) {
+      chunksByCollection.set(collectionId, (chunksByCollection.get(collectionId) ?? 0) + 1);
+    }
+  }
+
+  const collections = (collectionsResult.data ?? []).map((record) =>
+    mapKnowledgeCollection(record as JsonRecord, {
+      documentCount: documentsByCollection.get(String(record.id)) ?? 0,
+      chunkCount: chunksByCollection.get(String(record.id)) ?? 0,
+      retrievalCount: retrievalsResult.data?.length ?? 0,
+      reviewDueCount: reviewDueByCollection.get(String(record.id)) ?? 0,
+    }),
+  );
+
+  let searchResults: KnowledgeSearchResult[] = [];
+  if (trimmedQuery) {
+    const { data } = await context.supabase.schema("staffer").rpc("search_knowledge_chunks", {
+      target_query: trimmedQuery,
+      target_agent_id: null,
+      target_collection_keys: null,
+      target_limit: 6,
+    });
+    searchResults = ((data ?? []) as JsonRecord[]).map((record) => mapKnowledgeSearchResult(record));
+  }
+
+  return {
+    collections,
+    documents,
+    searchResults,
+    query: trimmedQuery,
   };
 }
 

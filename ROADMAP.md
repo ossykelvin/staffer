@@ -35,6 +35,8 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-022: Server-only AI provider router with fallback, guardrails and structured output — added governed AI runtime, Zod output contracts, provider fallback/error classification, prompt/data-exfiltration guardrails, confidence escalation, audit-ready telemetry and per-agent evaluation fixtures
 - [x] PB-023: Durable workflow execution, pause, resume, retry and replay — added live workflow run/step/event state, idempotent start, transition and replay RPCs, workflow execution console controls, repository reads, append-only events and static/live verification
 
+- [x] PB-024: Knowledge ingestion, retrieval, citations, retention and access control — added live knowledge collections, document versions, chunking, citation search, retrieval audit events, agent collection ACLs, retention/review/legal-hold metadata and Knowledge Hub ingestion/search UI
+
 ## Current first-draft scope
 
 - [x] Next.js App Router application shell
@@ -154,15 +156,15 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 8 — Knowledge and memory
 
-- [ ] Implement document upload, virus scan, metadata and versioning
-- [ ] Implement extraction, chunking, embeddings and citation-aware retrieval
-- [ ] Add collection-level access control and agent permissions
-- [ ] Add source freshness and review dates
-- [ ] Add retrieval filters by organisation, project, customer and sensitivity
+- [ ] Implement document upload, virus scan, metadata and versioning — PB-024 added manual text ingestion, scan-status metadata and append-only document versions; binary upload and real virus scanning remain open.
+- [ ] Implement extraction, chunking, embeddings and citation-aware retrieval — PB-024 added text extraction, chunking, full-text retrieval, citation JSON and embedding status tracking; generated embeddings remain open.
+- [x] Add collection-level access control and agent permissions — PB-024 added `knowledge_collections` and `knowledge_collection_agents` with agent retrieval enforcement in the search RPC.
+- [x] Add source freshness and review dates — PB-024 added review interval, review due, retention and legal-hold metadata.
+- [ ] Add retrieval filters by organisation, project, customer and sensitivity — PB-024 enforces organisation boundaries and collection filters; project/customer/sensitivity filters remain open.
 - [ ] Separate task memory, customer memory, project memory and company knowledge
 - [ ] Require policy or human approval before long-term memory promotion
-- [ ] Implement retention, deletion and legal-hold controls
-- [ ] Add answer citations and source preview
+- [ ] Implement retention, deletion and legal-hold controls — PB-024 added retention dates and legal-hold metadata; deletion/expiry workflows remain open.
+- [x] Add answer citations and source preview — PB-024 returns citation JSON and source excerpts from approved chunks.
 
 **Acceptance:** Every knowledge-grounded answer identifies its sources and agents cannot retrieve unauthorised collections.
 

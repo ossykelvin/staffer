@@ -44,7 +44,7 @@ The current app shows the shape of that product, but most screens are still stat
 
 - [x] PB-022: Implement the server-only AI provider router with fallback, guardrails, and structured output. Added server-only provider routing, AI SDK v6 structured outputs, guardrail blocking, retry/fallback classification, cost/timeout/step limits, confidence escalation, audit-ready run records, bounded `ToolLoopAgent` factory, env examples, static verification and per-agent evaluation fixtures.
 - [x] PB-023: Implement durable workflow execution, pause, resume, retry, and replay. Added live Supabase run/step/event state with RLS and Data API grants, idempotent start RPC, transition and replay RPCs, workflow execution repository reads, server actions for start/pause/resume/cancel/retry/replay, workflow console UI, static verification and live schema checks.
-- [ ] PB-024: Implement knowledge ingestion, retrieval, citations, retention, and access control.
+- [x] PB-024: Implement knowledge ingestion, retrieval, citations, retention, and access control. Added live knowledge collections, agent collection ACLs, document metadata/versioning, manual text ingestion, chunking, citation JSON, full-text retrieval RPC with agent access enforcement, retrieval audit events, retention/review/legal-hold metadata, Knowledge Hub UI, static verification and live RLS/grant checks.
 - [ ] PB-025: Launch the first live workflow: Customer Support Triage.
 - [ ] PB-026: Launch the second live workflow: Feature Intake to Engineering.
 - [ ] PB-027: Add governance dashboards for audit, cost, quality, latency, and failures.

@@ -8,6 +8,7 @@ const requiredFiles = [
   "supabase/migrations/20260715193703_phase3_task_collaboration.sql",
   "supabase/migrations/20260715195016_phase7_approval_policy_engine.sql",
   "supabase/migrations/20260715203228_phase6_workflow_execution.sql",
+  "supabase/migrations/20260715205737_phase8_knowledge_ingestion_retrieval.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
   "src/lib/ai/provider.ts",
@@ -30,6 +31,7 @@ const requiredFiles = [
   "src/app/approvals/[id]/actions.ts",
   "src/app/tasks/[id]/actions.ts",
   "src/app/workflows/[id]/actions.ts",
+  "src/app/knowledge/actions.ts",
 ];
 
 const requiredSql = [
@@ -152,6 +154,23 @@ const requiredWorkflowExecutionSql = [
   "replay_of_run_id",
 ];
 
+const requiredKnowledgeIngestionSql = [
+  "create table if not exists staffer.knowledge_collections",
+  "create table if not exists staffer.knowledge_collection_agents",
+  "create table if not exists staffer.document_versions",
+  "create table if not exists staffer.document_chunks",
+  "create table if not exists staffer.knowledge_retrieval_events",
+  "alter table staffer.knowledge_collections enable row level security",
+  "alter table staffer.document_chunks enable row level security",
+  "grant select, insert, update on staffer.knowledge_collections to authenticated",
+  "create policy knowledge_collection_agents_admin_write",
+  "create or replace function staffer.search_knowledge_chunks",
+  "create or replace function staffer.agent_can_retrieve_collection",
+  "citation jsonb",
+  "retention_until",
+  "legal_hold",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -214,8 +233,15 @@ for (const phrase of requiredWorkflowExecutionSql) {
   }
 }
 
+const knowledgeIngestionSql = readFileSync("supabase/migrations/20260715205737_phase8_knowledge_ingestion_retrieval.sql", "utf8").toLowerCase();
+for (const phrase of requiredKnowledgeIngestionSql) {
+  if (!knowledgeIngestionSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required knowledge ingestion SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getKnowledgeHubData", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
@@ -260,6 +286,13 @@ const workflowActions = readFileSync("src/app/workflows/[id]/actions.ts", "utf8"
 for (const phrase of ["startWorkflowRunAction", "transitionWorkflowRunAction", "replayWorkflowRunAction", "start_workflow_run", "transition_workflow_run", "replay_workflow_run", "workflow.run_started", "workflow.replay_requested"]) {
   if (!workflowActions.includes(phrase)) {
     throw new Error(`Missing workflow execution action phrase: ${phrase}`);
+  }
+}
+
+const knowledgeActions = readFileSync("src/app/knowledge/actions.ts", "utf8");
+for (const phrase of ["ingestKnowledgeDocumentAction", "document_versions", "document_chunks", "knowledge_collection_agents", "knowledge.document_ingested"]) {
+  if (!knowledgeActions.includes(phrase)) {
+    throw new Error(`Missing knowledge ingestion action phrase: ${phrase}`);
   }
 }
 

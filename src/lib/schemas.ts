@@ -205,6 +205,59 @@ export const taskCollaborationSchema = z.object({
   evidenceEvents: z.array(taskEvidenceEventSchema),
 });
 
+export const knowledgeCollectionSchema = z.object({
+  id: nonEmptyString,
+  key: nonEmptyString,
+  name: nonEmptyString,
+  description: z.string().trim().nullable().optional(),
+  sensitivity: nonEmptyString,
+  accessMode: nonEmptyString,
+  documentCount: z.number().int().nonnegative(),
+  chunkCount: z.number().int().nonnegative(),
+  retrievalCount: z.number().int().nonnegative().optional(),
+  reviewDueCount: z.number().int().nonnegative().optional(),
+  retentionDays: z.number().int().positive().nullable().optional(),
+  reviewIntervalDays: z.number().int().positive().nullable().optional(),
+});
+
+export const knowledgeDocumentSchema = z.object({
+  id: nonEmptyString,
+  title: nonEmptyString,
+  collectionId: nonEmptyString.nullable().optional(),
+  collectionName: nonEmptyString.nullable().optional(),
+  sourceUrl: z.string().trim().nullable().optional(),
+  sensitivity: nonEmptyString,
+  status: nonEmptyString,
+  version: z.number().int().positive(),
+  scanStatus: nonEmptyString,
+  extractionStatus: nonEmptyString,
+  embeddingStatus: nonEmptyString,
+  reviewDueAt: z.string().trim().nullable().optional(),
+  retentionUntil: z.string().trim().nullable().optional(),
+  legalHold: z.boolean(),
+  updatedAt: nonEmptyString,
+});
+
+export const knowledgeSearchResultSchema = z.object({
+  chunkId: nonEmptyString,
+  documentId: nonEmptyString,
+  collectionId: nonEmptyString,
+  collectionKey: nonEmptyString,
+  collectionName: nonEmptyString,
+  documentTitle: nonEmptyString,
+  chunkIndex: z.number().int().positive(),
+  excerpt: nonEmptyString,
+  citation: z.record(z.string(), z.unknown()),
+  rank: z.number(),
+});
+
+export const knowledgeHubDataSchema = z.object({
+  collections: z.array(knowledgeCollectionSchema),
+  documents: z.array(knowledgeDocumentSchema),
+  searchResults: z.array(knowledgeSearchResultSchema),
+  query: z.string(),
+});
+
 export const approvalRecordSchema = z.object({
   id: nonEmptyString,
   title: nonEmptyString,
@@ -283,6 +336,10 @@ export type TaskComment = z.infer<typeof taskCommentSchema>;
 export type TaskDependency = z.infer<typeof taskDependencySchema>;
 export type TaskEvidenceEvent = z.infer<typeof taskEvidenceEventSchema>;
 export type TaskWatcher = z.infer<typeof taskWatcherSchema>;
+export type KnowledgeCollection = z.infer<typeof knowledgeCollectionSchema>;
+export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
+export type KnowledgeSearchResult = z.infer<typeof knowledgeSearchResultSchema>;
+export type KnowledgeHubData = z.infer<typeof knowledgeHubDataSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
 export type ApprovalDetailRecord = z.infer<typeof approvalDetailRecordSchema>;
