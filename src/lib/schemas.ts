@@ -90,12 +90,61 @@ export const workflowDefinitionSchema = z.object({
 
 export const taskRecordSchema = z.object({
   id: nonEmptyString,
+  databaseId: nonEmptyString.optional(),
   title: nonEmptyString,
+  description: z.string().trim().optional(),
   owner: nonEmptyString,
   priority: nonEmptyString,
   status: nonEmptyString,
   due: nonEmptyString,
   project: nonEmptyString,
+  retryCount: z.number().int().nonnegative().optional(),
+  retryPolicy: z.record(z.string(), z.unknown()).optional(),
+  lastRetryAt: z.string().trim().optional(),
+  nextRetryAt: z.string().trim().optional(),
+  retryReason: z.string().trim().optional(),
+});
+
+export const taskCommentSchema = z.object({
+  id: nonEmptyString,
+  body: nonEmptyString,
+  visibility: nonEmptyString,
+  createdBy: nonEmptyString.optional(),
+  createdAt: nonEmptyString,
+});
+
+export const taskWatcherSchema = z.object({
+  userId: nonEmptyString,
+  createdBy: nonEmptyString.optional(),
+  createdAt: nonEmptyString,
+});
+
+export const taskDependencySchema = z.object({
+  id: nonEmptyString,
+  taskId: nonEmptyString,
+  dependsOnTaskId: nonEmptyString,
+  dependsOnReference: nonEmptyString,
+  dependsOnTitle: nonEmptyString,
+  dependencyType: nonEmptyString,
+  notes: z.string().trim().optional(),
+  createdAt: nonEmptyString,
+});
+
+export const taskEvidenceEventSchema = z.object({
+  id: nonEmptyString,
+  eventType: nonEmptyString,
+  title: nonEmptyString,
+  body: z.string().trim().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdBy: nonEmptyString.optional(),
+  createdAt: nonEmptyString,
+});
+
+export const taskCollaborationSchema = z.object({
+  comments: z.array(taskCommentSchema),
+  watchers: z.array(taskWatcherSchema),
+  dependencies: z.array(taskDependencySchema),
+  evidenceEvents: z.array(taskEvidenceEventSchema),
 });
 
 export const approvalRecordSchema = z.object({
@@ -118,4 +167,9 @@ export type AgentTool = z.infer<typeof agentToolSchema>;
 export type AgentVersion = z.infer<typeof agentVersionSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 export type TaskRecord = z.infer<typeof taskRecordSchema>;
+export type TaskCollaboration = z.infer<typeof taskCollaborationSchema>;
+export type TaskComment = z.infer<typeof taskCommentSchema>;
+export type TaskDependency = z.infer<typeof taskDependencySchema>;
+export type TaskEvidenceEvent = z.infer<typeof taskEvidenceEventSchema>;
+export type TaskWatcher = z.infer<typeof taskWatcherSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;

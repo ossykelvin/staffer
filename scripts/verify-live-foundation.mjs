@@ -5,6 +5,7 @@ const requiredFiles = [
   "supabase/migrations/20260715183241_phase2_agent_registry_skills.sql",
   "supabase/migrations/20260715184936_phase2_tool_registry_permissions.sql",
   "supabase/migrations/20260715191154_phase2_agent_guardrails.sql",
+  "supabase/migrations/20260715193703_phase3_task_collaboration.sql",
   "src/proxy.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
@@ -76,6 +77,26 @@ const requiredAgentGuardrailsSql = [
   "agents_approval_rules_array",
 ];
 
+const requiredTaskCollaborationSql = [
+  "retry_policy",
+  "retry_count",
+  "tasks_retry_policy_object",
+  "create table if not exists staffer.task_comments",
+  "create table if not exists staffer.task_watchers",
+  "create table if not exists staffer.task_dependencies",
+  "create table if not exists staffer.task_evidence_events",
+  "alter table staffer.task_comments enable row level security",
+  "alter table staffer.task_watchers enable row level security",
+  "alter table staffer.task_dependencies enable row level security",
+  "alter table staffer.task_evidence_events enable row level security",
+  "grant select, insert on",
+  "create policy task_comments_member_select",
+  "create policy task_comments_member_insert",
+  "create policy task_watchers_self_insert",
+  "create policy task_dependencies_operator_insert",
+  "create policy task_evidence_events_operator_insert",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -117,8 +138,15 @@ for (const phrase of requiredAgentGuardrailsSql) {
   }
 }
 
+const taskCollaborationSql = readFileSync("supabase/migrations/20260715193703_phase3_task_collaboration.sql", "utf8").toLowerCase();
+for (const phrase of requiredTaskCollaborationSql) {
+  if (!taskCollaborationSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required task collaboration SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getWorkflows", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
@@ -132,8 +160,10 @@ for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusA
 }
 
 const taskAction = readFileSync("src/app/tasks/[id]/actions.ts", "utf8");
-if (!taskAction.includes("task.status_changed")) {
-  throw new Error("Missing task transition audit event.");
+for (const phrase of ["task.status_changed", "addTaskCommentAction", "addTaskWatcherAction", "addTaskDependencyAction", "addTaskEvidenceAction", "retryTaskAction", "task.comment_added", "task.watcher_added", "task.dependency_added", "task.evidence_added", "task.retry_requested"]) {
+  if (!taskAction.includes(phrase)) {
+    throw new Error(`Missing task collaboration action phrase: ${phrase}`);
+  }
 }
 
 const settingsActions = readFileSync("src/app/settings/actions.ts", "utf8");

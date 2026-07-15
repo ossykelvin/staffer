@@ -1,7 +1,7 @@
 import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, workflows as demoWorkflows } from "@/lib/data";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/types";
+import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalRecord, TaskCollaboration, TaskDependency, TaskRecord, WorkflowDefinition } from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -182,12 +182,97 @@ function mapTask(record: JsonRecord): TaskRecord {
 
   return {
     id: String(record.reference ?? record.id),
+    databaseId: typeof record.id === "string" ? record.id : undefined,
     title: String(record.title ?? "Untitled task"),
+    description: typeof record.description === "string" ? record.description : undefined,
     owner: String(record.owner ?? "Unassigned"),
     priority,
     status: titleCase(String(record.status ?? "draft")),
     due: record.due_at ? new Date(String(record.due_at)).toLocaleDateString("en-GB") : "Unscheduled",
     project: String(record.project_key ?? "Staffer"),
+    retryCount: typeof record.retry_count === "number" ? record.retry_count : undefined,
+    retryPolicy: asJsonObject(record.retry_policy),
+    lastRetryAt: typeof record.last_retry_at === "string" ? record.last_retry_at : undefined,
+    nextRetryAt: typeof record.next_retry_at === "string" ? record.next_retry_at : undefined,
+    retryReason: typeof record.retry_reason === "string" ? record.retry_reason : undefined,
+  };
+}
+
+function mapTaskComment(record: JsonRecord) {
+  return {
+    id: String(record.id),
+    body: String(record.body ?? ""),
+    visibility: String(record.visibility ?? "internal"),
+    createdBy: typeof record.created_by === "string" ? record.created_by : undefined,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapTaskWatcher(record: JsonRecord) {
+  return {
+    userId: String(record.user_id),
+    createdBy: typeof record.created_by === "string" ? record.created_by : undefined,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapTaskEvidenceEvent(record: JsonRecord) {
+  return {
+    id: String(record.id),
+    eventType: String(record.event_type ?? "evidence"),
+    title: String(record.title ?? "Evidence recorded"),
+    body: typeof record.body === "string" ? record.body : undefined,
+    metadata: asJsonObject(record.metadata),
+    createdBy: typeof record.created_by === "string" ? record.created_by : undefined,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapTaskDependency(record: JsonRecord, tasksById: Map<string, TaskRecord>): TaskDependency {
+  const dependsOnTaskId = String(record.depends_on_task_id);
+  const dependsOnTask = tasksById.get(dependsOnTaskId);
+
+  return {
+    id: String(record.id),
+    taskId: String(record.task_id),
+    dependsOnTaskId,
+    dependsOnReference: dependsOnTask?.id ?? dependsOnTaskId,
+    dependsOnTitle: dependsOnTask?.title ?? "Dependency task",
+    dependencyType: String(record.dependency_type ?? "blocks"),
+    notes: typeof record.notes === "string" ? record.notes : undefined,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function demoTaskCollaboration(taskId: string): TaskCollaboration {
+  const task = demoTasks.find((item) => item.id === taskId);
+  const now = new Date().toISOString();
+
+  return {
+    comments: task
+      ? [
+          {
+            id: `${task.id}-comment-demo`,
+            body: `Demo note: ${task.title} is ready for live comments once demo mode is disabled.`,
+            visibility: "internal",
+            createdAt: now,
+          },
+        ]
+      : [],
+    watchers: task ? [{ userId: "demo-user", createdAt: now }] : [],
+    dependencies: [],
+    evidenceEvents: task
+      ? [
+          {
+            id: `${task.id}-evidence-demo`,
+            eventType: "system",
+            title: "Demo task loaded",
+            body: "Live evidence events are stored in tenant-scoped Supabase tables.",
+            metadata: { mode: "demo" },
+            createdAt: now,
+          },
+        ]
+      : [],
   };
 }
 
@@ -387,6 +472,84 @@ export async function getTasks() {
 export async function getTaskById(id: string) {
   const allTasks = await getTasks();
   return allTasks.find((task) => task.id === id);
+}
+
+export async function getTaskCollaboration(taskReference: string): Promise<TaskCollaboration> {
+  const context = await getLiveContext();
+  if (!context?.organisationId) {
+    return demoTaskCollaboration(taskReference);
+  }
+
+  const { data: task } = await context.supabase
+    .schema("staffer")
+    .from("tasks")
+    .select("id")
+    .eq("organisation_id", context.organisationId)
+    .eq("reference", taskReference)
+    .maybeSingle();
+
+  if (!task?.id) {
+    return { comments: [], watchers: [], dependencies: [], evidenceEvents: [] };
+  }
+
+  const taskId = String(task.id);
+  const [commentsResult, watchersResult, dependenciesResult, evidenceResult] = await Promise.all([
+    context.supabase
+      .schema("staffer")
+      .from("task_comments")
+      .select("id, body, visibility, created_by, created_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: false }),
+    context.supabase
+      .schema("staffer")
+      .from("task_watchers")
+      .select("user_id, created_by, created_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: false }),
+    context.supabase
+      .schema("staffer")
+      .from("task_dependencies")
+      .select("id, task_id, depends_on_task_id, dependency_type, notes, created_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: false }),
+    context.supabase
+      .schema("staffer")
+      .from("task_evidence_events")
+      .select("id, event_type, title, body, metadata, created_by, created_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const dependencies = (dependenciesResult.data ?? []) as JsonRecord[];
+  const dependencyTaskIds = [...new Set(dependencies.map((record) => String(record.depends_on_task_id)).filter(Boolean))];
+  const tasksById = new Map<string, TaskRecord>();
+
+  if (dependencyTaskIds.length) {
+    const { data: dependencyTasks } = await context.supabase
+      .schema("staffer")
+      .from("tasks")
+      .select("id, reference, title, project_key, priority, status, due_at")
+      .eq("organisation_id", context.organisationId)
+      .in("id", dependencyTaskIds);
+
+    for (const dependencyTask of dependencyTasks ?? []) {
+      const mapped = mapTask(dependencyTask as JsonRecord);
+      if (mapped.databaseId) {
+        tasksById.set(mapped.databaseId, mapped);
+      }
+    }
+  }
+
+  return {
+    comments: (commentsResult.data ?? []).map((record) => mapTaskComment(record as JsonRecord)),
+    watchers: (watchersResult.data ?? []).map((record) => mapTaskWatcher(record as JsonRecord)),
+    dependencies: dependencies.map((record) => mapTaskDependency(record, tasksById)),
+    evidenceEvents: (evidenceResult.data ?? []).map((record) => mapTaskEvidenceEvent(record as JsonRecord)),
+  };
 }
 
 export async function getWorkflows() {

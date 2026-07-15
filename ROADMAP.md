@@ -29,6 +29,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-017: Tools catalogue and agent-tool permission mapping — added live tool catalogue reads, tool creation with risk/approval/schema fields, agent-tool mapping/removal with JSON constraints, version snapshots and stricter same-tenant junction policies
 - [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step/token limits — added organisation default guardrail settings, per-agent runtime routing/limits, prohibited actions and approval rules with live migration `phase2_agent_guardrails`
 - [x] PB-019: Agent rollback, generated avatars and founder confirmation — added append-only rollback actions, generated avatar metadata/rendering and explicit founder confirmation/request-changes workflow with audit events
+- [x] PB-020: Task comments, dependencies, watchers, retries and evidence timelines — added tenant-scoped collaboration tables with RLS, task retry metadata, live repository reads, server-action mutations, audit events and task detail UI panels
 
 ## Current first-draft scope
 
@@ -79,12 +80,12 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [ ] Implement task creation, assignment, priority, due date and project linkage
 - [ ] Support human and agent assignees
-- [ ] Add task comments, attachments, dependencies and watchers
+- [x] Add task comments, attachments, dependencies and watchers — comments, watcher controls, dependency edges and attachment-reference evidence events are live-backed through PB-020
 - [ ] Add task states: draft, queued, running, blocked, review, approval, completed, failed, cancelled
-- [ ] Add retry policy and idempotency key
+- [x] Add retry policy and idempotency key — task idempotency keys existed in the core schema; PB-020 added retry policy/count/reason/timestamps and manual retry recording
 - [ ] Add task templates for recurring operations
 - [ ] Add kanban, table and detail views
-- [ ] Add activity timeline and evidence panel
+- [x] Add activity timeline and evidence panel — task detail pages now combine live evidence events with the existing demo activity timeline
 - [ ] Add notifications for overdue, failed and approval-waiting tasks
 
 **Acceptance:** A task can move from creation to completion with every state transition and actor recorded.
