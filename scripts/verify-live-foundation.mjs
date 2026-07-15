@@ -12,6 +12,7 @@ const requiredFiles = [
   "supabase/migrations/20260715220229_phase9_customer_support_triage.sql",
   "supabase/migrations/20260715221219_phase9_support_triage_indexes.sql",
   "supabase/migrations/20260715224930_phase9_approved_brevo_execution.sql",
+  "supabase/migrations/20260716003639_qualify_pgcrypto_digest_calls.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
   "src/lib/ai/provider.ts",
@@ -194,6 +195,14 @@ const requiredApprovedEmailExecutionSql = [
   "approval-gated Brevo send completion",
 ];
 
+const requiredQualifiedDigestSql = [
+  "alter extension pgcrypto set schema extensions",
+  "create or replace function staffer.record_audit_event",
+  "create or replace function staffer.accept_invitation_for_current_user",
+  "extensions.digest",
+  "'sha256'::text",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -274,6 +283,13 @@ const approvedEmailExecutionSql = readFileSync("supabase/migrations/202607152249
 for (const phrase of requiredApprovedEmailExecutionSql) {
   if (!approvedEmailExecutionSql.includes(phrase.toLowerCase())) {
     throw new Error(`Missing required approved email execution SQL phrase: ${phrase}`);
+  }
+}
+
+const qualifiedDigestSql = readFileSync("supabase/migrations/20260716003639_qualify_pgcrypto_digest_calls.sql", "utf8").toLowerCase();
+for (const phrase of requiredQualifiedDigestSql) {
+  if (!qualifiedDigestSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required qualified digest SQL phrase: ${phrase}`);
   }
 }
 
