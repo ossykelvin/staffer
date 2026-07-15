@@ -24,12 +24,13 @@ The current app shows the shape of that product, but most screens are still stat
 
 ### Next: connect the product to real governed data
 
-- [x] PB-008: Repair and verify the Supabase RLS membership model. Implemented `20260715082325_staffer_live_foundation.sql` with non-recursive membership helpers, explicit grants, role policies, and static verification; live apply/advisors remain pending until a Supabase project is linked.
+- [x] PB-008: Repair and verify the Supabase RLS membership model. Implemented `20260715082325_staffer_live_foundation.sql` with non-recursive membership helpers, explicit grants and role policies; applied live Staffer migrations to Supabase project `okkyvhkcpoyrflswatax`; exposed the `staffer` Data API schema; verified all Staffer tables have RLS and policies; cleaned up Staffer advisor performance warnings.
 - [x] PB-009: Implement Supabase Auth, protected routes, and unauthorised states. Implemented Next.js Proxy protection, login/sign-up, auth callback, and unauthorised route; verified with lint, typecheck, build, and smoke checks.
-- [x] PB-010: Add organisation onboarding and founder/admin membership. Implemented onboarding route and `staffer.create_organisation_for_current_user` RPC that creates founder membership and audit event; verified statically and by build.
+- [x] PB-010: Add organisation onboarding and founder/admin membership. Implemented onboarding route and `staffer.create_organisation_for_current_user` RPC that creates founder membership and audit event; applied live and extended with one-time invitation acceptance plus membership audit event.
 - [x] PB-011: Build tenant-aware repositories with demo fallback parity. Implemented repository layer that uses Supabase `staffer` schema in live mode and seed data in demo mode; verified with smoke checks.
 - [x] PB-012: Replace JSON reads with live repositories for agents, tasks, workflows, and approvals. Updated page/API data access to repository functions while retaining seed data for fallback/static params; verified with lint, typecheck, build, and smoke checks.
 - [x] PB-013: Add audit events for task state changes, approval decisions, and material mutations. Implemented audit RPC, task transition server action, and approval decision server action that record demo/live audit results; verified statically and through task/approval smoke checks.
+- [x] PB-013A: Complete Phase 1 identity operations. Added password reset/update flow, organisation settings UI, admin invitation creation, invite acceptance, encrypted integration secret storage, Staffer Data API exposure, and live Supabase verification.
 
 ### Later: build the governed AI workforce
 

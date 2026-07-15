@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv, publicEnv } from "@/lib/env";
 
-const protectedPrefixes = ["/agents", "/approvals", "/integrations", "/knowledge", "/onboarding", "/settings", "/tasks", "/workflows"];
+const protectedPrefixes = ["/account", "/agents", "/approvals", "/integrations", "/knowledge", "/onboarding", "/settings", "/tasks", "/workflows"];
 
 export async function updateSession(request: NextRequest) {
   const env = getSupabaseEnv();

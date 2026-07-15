@@ -17,9 +17,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-005: Add workflow detail pages and a dry-run timeline — implemented `/workflows/[id]` dry-run views; verified with lint, typecheck, build and `/workflows/support-triage` smoke check; no git commit because this folder is not a git repository
 - [x] PB-006: Add useful empty, loading, error and confirmation states across the app — implemented shared empty state plus route-level loading, error and not-found states; verified with lint, typecheck, build and HTTP smoke checks; no git commit because this folder is not a git repository
 - [x] PB-007: Fix local configuration ergonomics so the app starts cleanly from `.env.local.example` — quoted colour values and normalised blank optional env values; verified with lint, typecheck, build and `/api/health` smoke check; no git commit because this folder is not a git repository
-- [x] PB-008: Repair and verify the Supabase RLS membership model — implemented `20260715082325_staffer_live_foundation.sql` with non-recursive membership helpers, explicit grants and role-aware policies; verified by `npm run verify:live-foundation`, lint, typecheck and build; live apply/advisors pending until a Supabase project is linked; no git commit because this folder is not a git repository
+- [x] PB-008: Repair and verify the Supabase RLS membership model — implemented `20260715082325_staffer_live_foundation.sql`, applied Staffer migrations to Supabase project `okkyvhkcpoyrflswatax`, exposed the `staffer` Data API schema, and verified every Staffer table has RLS plus tenant-aware policies; verified by `npm run verify:live-foundation`, lint, typecheck, build and Supabase advisors
 - [x] PB-009: Implement Supabase Auth, protected routes and unauthorised states — implemented Next.js Proxy protection, login/sign-up, auth callback and unauthorised route; verified with lint, typecheck, build and smoke checks; no git commit because this folder is not a git repository
-- [x] PB-010: Add organisation onboarding and founder/admin membership — implemented onboarding route and `staffer.create_organisation_for_current_user` RPC; verified by static live-foundation check and build; live RPC execution pending linked Supabase project; no git commit because this folder is not a git repository
+- [x] PB-010: Add organisation onboarding and founder/admin membership — implemented onboarding route and `staffer.create_organisation_for_current_user` RPC; applied live to Supabase with invitation acceptance and membership audit events; verified by static live-foundation check and build
 - [x] PB-011: Build tenant-aware repositories with demo fallback parity — implemented repository layer for agents, tasks, workflows and approvals with seed fallback; verified with lint, typecheck, build and smoke checks; no git commit because this folder is not a git repository
 - [x] PB-012: Replace JSON reads with live repositories for agents, tasks, workflows and approvals — updated page/API data access to repositories while retaining seed data for fallback/static params; verified with lint, typecheck, build and smoke checks; no git commit because this folder is not a git repository
 - [x] PB-013: Add audit events for task state changes, approval decisions and material mutations — implemented audit RPC plus task transition and approval decision server actions for demo/live audit events; verified by static live-foundation check, lint, typecheck, build and task/approval smoke checks; no git commit because this folder is not a git repository
@@ -41,16 +41,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 1 — Foundation and identity
 
-- [ ] Create Supabase project and dedicated `staffer` schema
-- [ ] Apply migration and verify all tables, indexes and policies
-- [ ] Implement Supabase Auth with email/password and password reset flow
-- [ ] Create organisation onboarding and founder/admin membership
-- [ ] Implement tenant-aware server data access layer
-- [ ] Replace JSON demonstration loaders with database repositories
-- [ ] Retain `NEXT_PUBLIC_DEMO_MODE` fallback for local demonstrations
-- [ ] Add protected app routes and unauthorised states
-- [ ] Add role model: founder, administrator, reviewer, operator, viewer
-- [ ] Add organisation settings UI and encrypted integration secrets
+- [x] Create Supabase project and dedicated `staffer` schema — connected to Supabase project `okkyvhkcpoyrflswatax`; applied Staffer schema via managed migrations
+- [x] Apply migration and verify all tables, indexes and policies — applied `staffer_core`, `staffer_live_foundation`, `phase1_identity_completion`, `phase1_policy_advisor_cleanup`, and `expose_staffer_data_api_schema`; verified all 16 Staffer tables have RLS and policies
+- [x] Implement Supabase Auth with email/password and password reset flow — sign-in/sign-up existed; added reset request, token confirmation route, and authenticated password update page
+- [x] Create organisation onboarding and founder/admin membership — implemented onboarding RPC and live founder membership audit trail
+- [x] Implement tenant-aware server data access layer — repository layer reads live tenant-scoped Supabase records with authenticated membership context
+- [x] Replace JSON demonstration loaders with database repositories — pages/API use repositories with seed fallback for static params and demo parity
+- [x] Retain `NEXT_PUBLIC_DEMO_MODE` fallback for local demonstrations — demo mode remains default in `.env.local.example`
+- [x] Add protected app routes and unauthorised states — Next.js proxy protects app/account routes, redirects unauthenticated users, and handles no-membership onboarding
+- [x] Add role model: founder, administrator, reviewer, operator, viewer — role enum, helper RPCs and role-aware RLS policies are live
+- [x] Add organisation settings UI and encrypted integration secrets — settings page now updates organisation settings, creates one-time invitations, lists members/invitations, and stores integration secrets encrypted server-side
 
 **Acceptance:** A new founder can sign up, create an organisation, invite a user and access only that organisation's records.
 

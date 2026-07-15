@@ -19,6 +19,7 @@ export const publicEnvSchema = z.object({
   NEXT_PUBLIC_SECONDARY_COLOR: nonEmptyString,
   NEXT_PUBLIC_ACCENT_COLOR: nonEmptyString,
   NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]),
+  NEXT_PUBLIC_APP_URL: optionalUrl,
 });
 
 export const publicEnv = publicEnvSchema.parse({
@@ -29,6 +30,7 @@ export const publicEnv = publicEnvSchema.parse({
   NEXT_PUBLIC_SECONDARY_COLOR: process.env.NEXT_PUBLIC_SECONDARY_COLOR,
   NEXT_PUBLIC_ACCENT_COLOR: process.env.NEXT_PUBLIC_ACCENT_COLOR,
   NEXT_PUBLIC_DEMO_MODE: process.env.NEXT_PUBLIC_DEMO_MODE,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 });
 
 const aiProviderSchema = z.enum(["google", "openrouter"]);
@@ -116,4 +118,12 @@ export const supabaseEnvSchema = z
 
 export function getSupabaseEnv(environment: NodeJS.ProcessEnv = process.env) {
   return supabaseEnvSchema.parse(environment);
+}
+
+export const governanceEnvSchema = z.object({
+  INTEGRATION_ENCRYPTION_KEY: optionalString,
+});
+
+export function getGovernanceEnv(environment: NodeJS.ProcessEnv = process.env) {
+  return governanceEnvSchema.parse(environment);
 }

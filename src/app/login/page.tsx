@@ -37,9 +37,14 @@ export default async function LoginPage({
             Password
             <input name="password" type="password" required className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
           </label>
-          <button type="submit" className="mt-6 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500">
-            Sign in
-          </button>
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <button type="submit" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500">
+              Sign in
+            </button>
+            <Link href="/auth/reset-password" className="text-sm font-semibold text-cyan-300">
+              Forgot password?
+            </Link>
+          </div>
         </form>
         <form action={signUpAction} className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
           <h2 className="font-semibold text-white">Create founder account</h2>
