@@ -26,6 +26,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-014: Agent profile CRUD foundation — implemented `/agents/new`, profile edit forms, lifecycle status controls and server-side create/update/status actions; applied live migration `phase2_agent_registry_skills`; verified with static live-foundation check, lint, typecheck, build and Supabase RLS checks
 - [x] PB-015: Agent versioning — added append-only `staffer.agent_versions`, version snapshots for create/edit/activate/retire/skill mapping changes and visible version history on agent detail pages; verified live RLS and authenticated grants
 - [x] PB-016: Skills catalogue and mapping — added live skills catalogue reads, skill creation, agent-skill proficiency mapping/removal and tightened cross-tenant junction policies; verified no duplicate permissive Staffer policies for touched tables
+- [x] PB-017: Tools catalogue and agent-tool permission mapping — added live tool catalogue reads, tool creation with risk/approval/schema fields, agent-tool mapping/removal with JSON constraints, version snapshots and stricter same-tenant junction policies
 
 ## Current first-draft scope
 
@@ -62,7 +63,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Implement create, edit, version, activate and retire agent profiles — `/agents/new` and `/agents/[id]` now provide live-backed profile creation/editing and draft/active/retired lifecycle controls with version snapshots and audit events
 - [x] Store biography, pronouns, location, timezone, experience, personality and communication style — editable profile form persists these fields in the tenant-owned `agents.profile` JSON with validated server actions and demo fallback
 - [x] Create skills catalogue and agent-skill proficiency mapping — skills can be created per organisation and mapped to agents through `agent_skills` with proficiency levels and tenant-safe RLS policies
-- [ ] Create tools catalogue and agent-tool permission mapping
+- [x] Create tools catalogue and agent-tool permission mapping — tools can be created per organisation with risk class, input/output schemas, default approval requirements and active state, then mapped to agents through tenant-safe `agent_tools` constraints
 - [ ] Configure autonomy levels 0–5 with organisation defaults
 - [ ] Configure prohibited actions and approval rules per agent
 - [ ] Add model, step, token and cost limits per agent

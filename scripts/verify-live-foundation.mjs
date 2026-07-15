@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 const requiredFiles = [
   "supabase/migrations/20260715082325_staffer_live_foundation.sql",
   "supabase/migrations/20260715183241_phase2_agent_registry_skills.sql",
+  "supabase/migrations/20260715184936_phase2_tool_registry_permissions.sql",
   "src/proxy.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
@@ -55,6 +56,15 @@ const requiredPhaseTwoSql = [
   "s.organisation_id = a.organisation_id",
 ];
 
+const requiredToolRegistrySql = [
+  "drop policy if exists agent_tools_admin_insert",
+  "create policy agent_tools_admin_insert",
+  "create policy agent_tools_admin_update",
+  "create policy agent_tools_admin_delete",
+  "join staffer.tools t on t.id = tool_id",
+  "t.organisation_id = a.organisation_id",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -82,15 +92,22 @@ for (const phrase of requiredPhaseTwoSql) {
   }
 }
 
+const toolRegistrySql = readFileSync("supabase/migrations/20260715184936_phase2_tool_registry_permissions.sql", "utf8").toLowerCase();
+for (const phrase of requiredToolRegistrySql) {
+  if (!toolRegistrySql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required tool registry SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getApprovals", "getWorkflows", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
 }
 
 const agentActions = readFileSync("src/app/agents/actions.ts", "utf8");
-for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "agent.skill_mapped"]) {
+for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "createToolAction", "assignAgentToolAction", "removeAgentToolAction", "agent.skill_mapped", "agent.tool_mapped"]) {
   if (!agentActions.includes(phrase)) {
     throw new Error(`Missing agent registry action phrase: ${phrase}`);
   }

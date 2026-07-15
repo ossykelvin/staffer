@@ -1,12 +1,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { assignAgentSkillAction, createSkillAction, removeAgentSkillAction, setAgentStatusAction, updateAgentAction } from "@/app/agents/actions";
+import {
+  assignAgentSkillAction,
+  assignAgentToolAction,
+  createSkillAction,
+  createToolAction,
+  removeAgentSkillAction,
+  removeAgentToolAction,
+  setAgentStatusAction,
+  updateAgentAction,
+} from "@/app/agents/actions";
 import { AgentProfileForm } from "@/components/agent-profile-form";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { agents } from "@/lib/data";
-import { getAgentById, getAgentVersions, getSkills } from "@/lib/repositories/staffer";
+import { getAgentById, getAgentVersions, getSkills, getTools } from "@/lib/repositories/staffer";
 
 export function generateStaticParams() {
   return agents.map((agent) => ({ id: agent.id }));
@@ -20,11 +29,14 @@ export default async function AgentDetailPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const { id } = await params;
-  const [agent, skills, versions, query] = await Promise.all([getAgentById(id), getSkills(), getAgentVersions(id), searchParams]);
+  const [agent, skills, tools, versions, query] = await Promise.all([getAgentById(id), getSkills(), getTools(), getAgentVersions(id), searchParams]);
   if (!agent) notFound();
   const displayedSkills = agent.skillDetails?.length
     ? agent.skillDetails
     : agent.skills.map((skill) => ({ key: skill, name: skill, id: undefined, proficiency: undefined }));
+  const displayedTools = agent.toolDetails?.length
+    ? agent.toolDetails
+    : agent.tools.map((tool) => ({ key: tool, name: tool, id: undefined, riskClass: 1, requiresApproval: false, isActive: true, constraints: undefined }));
 
   return (
     <>
@@ -225,11 +237,32 @@ export default async function AgentDetailPage({
           <section className="grid gap-6 md:grid-cols-2">
             <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
               <h2 className="font-semibold">Permitted tools</h2>
-              <ul className="mt-4 space-y-3 text-sm text-slate-400">
-                {agent.tools.map((tool) => (
-                  <li key={tool} className="font-mono text-xs">{tool}</li>
+              <div className="mt-4 space-y-3">
+                {displayedTools.map((tool) => (
+                  <div key={tool.key} className="rounded-xl border border-white/7 bg-black/10 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-xs text-slate-300">{tool.key}</p>
+                        <p className="mt-1 text-sm text-slate-400">{tool.name}</p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          Risk {tool.riskClass}/5 · {tool.requiresApproval ? "approval required" : "no default approval"} · {tool.isActive ? "active" : "inactive"}
+                        </p>
+                      </div>
+                      {agent.databaseId && tool.id ? (
+                        <form action={removeAgentToolAction}>
+                          <input type="hidden" name="agentKey" value={agent.id} />
+                          <input type="hidden" name="agentId" value={agent.databaseId} />
+                          <input type="hidden" name="toolId" value={tool.id} />
+                          <button type="submit" className="text-xs text-slate-500 transition hover:text-rose-200">Remove</button>
+                        </form>
+                      ) : null}
+                    </div>
+                    {tool.constraints && Object.keys(tool.constraints).length ? (
+                      <pre className="mt-3 overflow-auto rounded-lg bg-black/30 p-3 text-xs text-slate-500">{JSON.stringify(tool.constraints, null, 2)}</pre>
+                    ) : null}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
             <div className="rounded-2xl border border-amber-400/12 bg-amber-400/[0.035] p-6">
               <h2 className="font-semibold text-amber-200">Approval boundaries</h2>
@@ -238,6 +271,75 @@ export default async function AgentDetailPage({
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold">Tool catalogue permissions</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Define narrow server-enforced tool contracts, then map only approved tools to this agent with explicit constraints.</p>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <form action={createToolAction} className="space-y-3 rounded-xl border border-white/7 bg-black/10 p-4">
+                <input type="hidden" name="agentKey" value={agent.id} />
+                <label className="block text-sm text-slate-400">
+                  Tool name
+                  <input name="name" required className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Tool key
+                  <input name="key" placeholder="generated from name if blank" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Description
+                  <textarea name="description" rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Risk class
+                  <select name="riskClass" defaultValue="1" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50">
+                    {[0, 1, 2, 3, 4, 5].map((level) => (
+                      <option key={level} value={level}>Risk {level}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-3 text-sm text-slate-400">
+                  <input name="requiresApproval" type="checkbox" className="size-4 rounded border-white/10 bg-black/20" />
+                  Requires approval by default
+                </label>
+                <input type="hidden" name="isActive" value="true" />
+                <label className="block text-sm text-slate-400">
+                  Input schema JSON
+                  <textarea name="inputSchema" rows={3} defaultValue="{}" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Output schema JSON
+                  <textarea name="outputSchema" rows={3} defaultValue="{}" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-slate-100 outline-none transition focus:border-blue-400/50" />
+                </label>
+                <button type="submit" className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/7">Add tool</button>
+              </form>
+
+              <form action={assignAgentToolAction} className="space-y-3 rounded-xl border border-white/7 bg-black/10 p-4">
+                <input type="hidden" name="agentKey" value={agent.id} />
+                <input type="hidden" name="agentId" value={agent.databaseId ?? ""} />
+                <label className="block text-sm text-slate-400">
+                  Catalogue tool
+                  <select name="toolId" required className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50">
+                    {tools.map((tool) => (
+                      <option key={tool.key} value={tool.id ?? tool.key}>
+                        {tool.name} · risk {tool.riskClass}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-400">
+                  Permission constraints JSON
+                  <textarea
+                    name="constraints"
+                    rows={7}
+                    defaultValue={'{\n  "scope": "read_only",\n  "requiresApprovalOverride": null\n}'}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-slate-100 outline-none transition focus:border-blue-400/50"
+                  />
+                </label>
+                <button type="submit" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500">Map tool permission</button>
+              </form>
             </div>
           </section>
 

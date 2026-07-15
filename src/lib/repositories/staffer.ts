@@ -1,7 +1,7 @@
 import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, workflows as demoWorkflows } from "@/lib/data";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentProfile, AgentSkill, AgentVersion, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/types";
+import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalRecord, TaskRecord, WorkflowDefinition } from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -48,12 +48,38 @@ function mapAgentSkill(record: JsonRecord): AgentSkill | null {
   };
 }
 
+function asJsonObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function mapAgentTool(record: JsonRecord): AgentTool | null {
+  const tool = asNestedRecord(record.tools);
+  if (!tool) {
+    return null;
+  }
+
+  return {
+    id: typeof tool.id === "string" ? tool.id : undefined,
+    key: String(tool.key ?? tool.id),
+    name: String(tool.name ?? tool.key ?? "Unnamed tool"),
+    description: typeof tool.description === "string" ? tool.description : undefined,
+    riskClass: Number(tool.risk_class ?? 1),
+    requiresApproval: Boolean(tool.requires_approval),
+    isActive: tool.is_active !== false,
+    constraints: asJsonObject(record.constraints),
+  };
+}
+
 function mapAgent(record: JsonRecord): AgentProfile {
   const profile = asProfile(record);
   const skillDetails = Array.isArray(record.agent_skills)
     ? record.agent_skills.map((item) => mapAgentSkill(item as JsonRecord)).filter((item): item is AgentSkill => Boolean(item))
     : [];
+  const toolDetails = Array.isArray(record.agent_tools)
+    ? record.agent_tools.map((item) => mapAgentTool(item as JsonRecord)).filter((item): item is AgentTool => Boolean(item))
+    : [];
   const skills = skillDetails.length ? skillDetails.map((skill) => skill.name) : asStringArray(profile.skills);
+  const tools = toolDetails.length ? toolDetails.map((tool) => tool.key) : asStringArray(profile.tools);
 
   return {
     id: String(record.key ?? record.id),
@@ -82,7 +108,8 @@ function mapAgent(record: JsonRecord): AgentProfile {
     signatureHabit: typeof profile.signatureHabit === "string" ? profile.signatureHabit : undefined,
     skills,
     skillDetails,
-    tools: asStringArray(profile.tools),
+    tools,
+    toolDetails,
     requiresApproval: asStringArray(profile.requiresApproval),
   };
 }
@@ -93,6 +120,18 @@ function mapSkill(record: JsonRecord): AgentSkill {
     key: String(record.key ?? record.id),
     name: String(record.name ?? record.key ?? "Unnamed skill"),
     description: typeof record.description === "string" ? record.description : undefined,
+  };
+}
+
+function mapTool(record: JsonRecord): AgentTool {
+  return {
+    id: typeof record.id === "string" ? record.id : undefined,
+    key: String(record.key ?? record.id),
+    name: String(record.name ?? record.key ?? "Unnamed tool"),
+    description: typeof record.description === "string" ? record.description : undefined,
+    riskClass: Number(record.risk_class ?? 1),
+    requiresApproval: Boolean(record.requires_approval),
+    isActive: record.is_active !== false,
   };
 }
 
@@ -191,7 +230,7 @@ export async function getAgents() {
   const { data, error } = await context.supabase
     .schema("staffer")
     .from("agents")
-    .select("*, agent_skills(proficiency, skills(id, key, name, description))")
+    .select("*, agent_skills(proficiency, skills(id, key, name, description)), agent_tools(constraints, tools(id, key, name, description, risk_class, requires_approval, is_active))")
     .eq("organisation_id", context.organisationId)
     .order("name");
 
@@ -226,6 +265,36 @@ export async function getSkills() {
     .order("name");
 
   return error || !data ? [] : data.map((record) => mapSkill(record as JsonRecord));
+}
+
+export async function getTools() {
+  const context = await getLiveContext();
+  if (!context?.organisationId) {
+    const tools = new Map<string, AgentTool>();
+
+    for (const agent of demoAgents) {
+      for (const tool of agent.tools) {
+        tools.set(tool, {
+          key: tool,
+          name: titleCase(tool),
+          riskClass: agent.requiresApproval.some((boundary) => boundary.toLowerCase().includes(tool.toLowerCase())) ? 3 : 1,
+          requiresApproval: false,
+          isActive: true,
+        });
+      }
+    }
+
+    return [...tools.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("tools")
+    .select("id, key, name, description, risk_class, requires_approval, is_active")
+    .eq("organisation_id", context.organisationId)
+    .order("name");
+
+  return error || !data ? [] : data.map((record) => mapTool(record as JsonRecord));
 }
 
 export async function getAgentVersions(agentId: string) {

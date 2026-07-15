@@ -39,6 +39,28 @@ function intValue(formData: FormData, key: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function booleanValue(formData: FormData, key: string) {
+  return formData.get(key) === "on" || formData.get(key) === "true";
+}
+
+function jsonObjectValue(formData: FormData, key: string) {
+  const raw = text(formData, key);
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Expected a JSON object.");
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(`${key} must be valid JSON object syntax.`);
+  }
+}
+
 function redirectWithParams(path: string, params: Record<string, string>): never {
   const search = new URLSearchParams(params);
   redirect(`${path}?${search.toString()}`);
@@ -535,5 +557,216 @@ export async function removeAgentSkillAction(formData: FormData) {
       throw error;
     }
     redirectWithParams(`/agents/${agentKey}`, { error: error instanceof Error ? error.message : "Unable to remove skill from agent." });
+  }
+}
+
+export async function createToolAction(formData: FormData) {
+  const agentKey = slugifyKey(text(formData, "agentKey"));
+  const name = text(formData, "name");
+  const key = slugifyKey(text(formData, "key") || name);
+  const description = text(formData, "description");
+  const riskClass = Math.min(5, Math.max(0, intValue(formData, "riskClass", 1)));
+  const requiresApproval = booleanValue(formData, "requiresApproval");
+  const isActive = !formData.has("isActive") || booleanValue(formData, "isActive");
+
+  if (isDemoMode()) {
+    redirectWithParams(agentKey ? `/agents/${agentKey}` : "/agents", { message: "Demo tool staged. Live persistence is available when demo mode is disabled." });
+  }
+
+  try {
+    if (!name || !key) {
+      throw new Error("Tool name and key are required.");
+    }
+
+    const context = await requireAdminContext();
+    const { data: tool, error } = await context.supabase
+      .schema("staffer")
+      .from("tools")
+      .insert({
+        organisation_id: context.organisationId,
+        key,
+        name,
+        description: description || null,
+        risk_class: riskClass,
+        input_schema: jsonObjectValue(formData, "inputSchema"),
+        output_schema: jsonObjectValue(formData, "outputSchema"),
+        requires_approval: requiresApproval,
+        is_active: isActive,
+      })
+      .select("id, key, name")
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: context.organisationId,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "tool.created",
+      entityType: "tool",
+      entityId: String(tool.id),
+      summary: "Tool catalogue entry was created.",
+      details: { key, name, riskClass, requiresApproval, isActive },
+    });
+
+    revalidatePath("/agents");
+    redirectWithParams(agentKey ? `/agents/${agentKey}` : "/agents", { message: "Tool added to the organisation catalogue." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(agentKey ? `/agents/${agentKey}` : "/agents", { error: error instanceof Error ? error.message : "Unable to create tool." });
+  }
+}
+
+export async function assignAgentToolAction(formData: FormData) {
+  const agentKey = slugifyKey(text(formData, "agentKey"));
+  const agentId = text(formData, "agentId");
+  const toolId = text(formData, "toolId");
+  const constraints = jsonObjectValue(formData, "constraints");
+
+  if (isDemoMode()) {
+    redirectWithParams(`/agents/${agentKey}`, { message: "Demo tool permission staged. No live record was changed." });
+  }
+
+  try {
+    if (!agentId || !toolId) {
+      throw new Error("Agent and tool are required.");
+    }
+
+    const context = await requireAdminContext();
+    const { data: existing, error: existingError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("*")
+      .eq("organisation_id", context.organisationId)
+      .eq("id", agentId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (!existing?.id) {
+      throw new Error("Agent profile was not found.");
+    }
+
+    const { error } = await context.supabase
+      .schema("staffer")
+      .from("agent_tools")
+      .upsert({ agent_id: agentId, tool_id: toolId, constraints }, { onConflict: "agent_id,tool_id" });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const nextVersion = Number(existing.version ?? 1) + 1;
+    const { data: updated, error: updateError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .update({ version: nextVersion, updated_at: new Date().toISOString() })
+      .eq("id", agentId)
+      .eq("organisation_id", context.organisationId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    await recordAgentVersion(context, updated as Record<string, unknown>, "Agent tool permission mapping updated.");
+    await recordAuditEvent({
+      organisationId: context.organisationId,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "agent.tool_mapped",
+      entityType: "agent",
+      entityId: agentId,
+      summary: "Agent tool permission mapping was updated.",
+      details: { agentKey, toolId, constraints, version: nextVersion },
+    });
+
+    revalidatePath("/agents");
+    redirectWithParams(`/agents/${agentKey}`, { message: `Tool permission saved. Version ${nextVersion} recorded.` });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/agents/${agentKey}`, { error: error instanceof Error ? error.message : "Unable to map tool to agent." });
+  }
+}
+
+export async function removeAgentToolAction(formData: FormData) {
+  const agentKey = slugifyKey(text(formData, "agentKey"));
+  const agentId = text(formData, "agentId");
+  const toolId = text(formData, "toolId");
+
+  if (isDemoMode()) {
+    redirectWithParams(`/agents/${agentKey}`, { message: "Demo tool permission removal staged. No live record was changed." });
+  }
+
+  try {
+    if (!agentId || !toolId) {
+      throw new Error("Agent and tool are required.");
+    }
+
+    const context = await requireAdminContext();
+    const { data: existing, error: existingError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("*")
+      .eq("organisation_id", context.organisationId)
+      .eq("id", agentId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (!existing?.id) {
+      throw new Error("Agent profile was not found.");
+    }
+
+    const { error } = await context.supabase.schema("staffer").from("agent_tools").delete().eq("agent_id", agentId).eq("tool_id", toolId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const nextVersion = Number(existing.version ?? 1) + 1;
+    const { data: updated, error: updateError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .update({ version: nextVersion, updated_at: new Date().toISOString() })
+      .eq("id", agentId)
+      .eq("organisation_id", context.organisationId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    await recordAgentVersion(context, updated as Record<string, unknown>, "Agent tool permission mapping removed.");
+    await recordAuditEvent({
+      organisationId: context.organisationId,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "agent.tool_removed",
+      entityType: "agent",
+      entityId: agentId,
+      summary: "Agent tool permission mapping was removed.",
+      details: { agentKey, toolId, version: nextVersion },
+    });
+
+    revalidatePath("/agents");
+    redirectWithParams(`/agents/${agentKey}`, { message: `Tool permission removed. Version ${nextVersion} recorded.` });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/agents/${agentKey}`, { error: error instanceof Error ? error.message : "Unable to remove tool from agent." });
   }
 }

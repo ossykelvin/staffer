@@ -11,6 +11,17 @@ export const agentSkillSchema = z.object({
   proficiency: z.number().int().min(1).max(5).optional(),
 });
 
+export const agentToolSchema = z.object({
+  id: nonEmptyString.optional(),
+  key: nonEmptyString,
+  name: nonEmptyString,
+  description: z.string().trim().optional(),
+  riskClass: z.number().int().min(0).max(5),
+  requiresApproval: z.boolean(),
+  isActive: z.boolean(),
+  constraints: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const agentVersionSchema = z.object({
   id: nonEmptyString,
   agentId: nonEmptyString,
@@ -48,6 +59,7 @@ export const agentProfileSchema = z.object({
   skills: stringList,
   skillDetails: z.array(agentSkillSchema).optional(),
   tools: stringList,
+  toolDetails: z.array(agentToolSchema).optional(),
   requiresApproval: stringList,
 });
 
@@ -88,6 +100,7 @@ export const approvalRecordsSchema = z.array(approvalRecordSchema);
 
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type AgentSkill = z.infer<typeof agentSkillSchema>;
+export type AgentTool = z.infer<typeof agentToolSchema>;
 export type AgentVersion = z.infer<typeof agentVersionSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 export type TaskRecord = z.infer<typeof taskRecordSchema>;
