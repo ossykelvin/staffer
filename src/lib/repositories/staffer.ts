@@ -1,11 +1,13 @@
 import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, workflows as demoWorkflows } from "@/lib/data";
+import { evaluateApprovalPolicy } from "@/lib/approvals/policy";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalRecord, TaskCollaboration, TaskDependency, TaskRecord, WorkflowDefinition } from "@/lib/types";
+import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalDecision, ApprovalDetailRecord, ApprovalExecutionCheck, ApprovalRecord, TaskCollaboration, TaskDependency, TaskRecord, WorkflowDefinition } from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
 const priorityLabels = ["Low", "Medium", "High", "High", "Critical"];
+const riskLabels = ["Low", "Low", "Medium", "High", "Critical", "Critical"];
 
 function isDemoMode() {
   return publicEnv.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -67,6 +69,20 @@ function mapAgentSkill(record: JsonRecord): AgentSkill | null {
 
 function asJsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function riskClassFromLabel(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized === "critical") {
+    return 4;
+  }
+  if (normalized === "high") {
+    return 3;
+  }
+  if (normalized === "medium") {
+    return 2;
+  }
+  return 1;
 }
 
 function mapAgentTool(record: JsonRecord): AgentTool | null {
@@ -293,7 +309,9 @@ function mapWorkflow(record: JsonRecord): WorkflowDefinition {
 
 function mapApproval(record: JsonRecord): ApprovalRecord {
   const riskClass = typeof record.risk_class === "number" ? record.risk_class : 1;
-  const risk = riskClass >= 4 ? "Critical" : riskClass >= 3 ? "High" : riskClass >= 2 ? "Medium" : "Low";
+  const risk = riskLabels[riskClass] ?? "Low";
+  const payload = asJsonObject(record.action_payload);
+  const policySnapshot = asJsonObject(record.policy_snapshot);
 
   return {
     id: String(record.id),
@@ -302,6 +320,78 @@ function mapApproval(record: JsonRecord): ApprovalRecord {
     type: String(record.action_key ?? "Protected action"),
     risk,
     submitted: record.created_at ? new Date(String(record.created_at)).toLocaleString("en-GB") : "Pending",
+    status: String(record.status ?? "pending"),
+    payload,
+    payloadHash: typeof record.payload_hash === "string" ? record.payload_hash : undefined,
+    policyKey: typeof policySnapshot.policyKey === "string" ? policySnapshot.policyKey : undefined,
+    policyName: typeof policySnapshot.policyName === "string" ? policySnapshot.policyName : undefined,
+    requiredReviewerCount: typeof record.required_reviewer_count === "number" ? record.required_reviewer_count : undefined,
+    approvedReviewerCount: typeof record.approved_reviewer_count === "number" ? record.approved_reviewer_count : undefined,
+    executionStatus: typeof record.execution_status === "string" ? record.execution_status : undefined,
+    executionPayloadHash: typeof record.execution_payload_hash === "string" ? record.execution_payload_hash : undefined,
+    executionVerifiedAt: typeof record.execution_verified_at === "string" ? record.execution_verified_at : undefined,
+  };
+}
+
+function mapApprovalDecision(record: JsonRecord): ApprovalDecision {
+  return {
+    id: String(record.id),
+    decision: String(record.decision ?? "changes_requested"),
+    comment: typeof record.comment === "string" ? record.comment : undefined,
+    decidedBy: typeof record.decided_by === "string" ? record.decided_by : undefined,
+    decidedAt: String(record.decided_at ?? new Date().toISOString()),
+    payloadHashAtDecision: String(record.payload_hash_at_decision ?? ""),
+  };
+}
+
+function mapApprovalExecutionCheck(record: JsonRecord): ApprovalExecutionCheck {
+  return {
+    id: String(record.id),
+    expectedPayloadHash: String(record.expected_payload_hash ?? ""),
+    actualPayloadHash: String(record.actual_payload_hash ?? ""),
+    verified: Boolean(record.verified),
+    status: String(record.status ?? "blocked"),
+    failureReason: typeof record.failure_reason === "string" ? record.failure_reason : undefined,
+    checkedBy: typeof record.checked_by === "string" ? record.checked_by : undefined,
+    checkedAt: String(record.checked_at ?? new Date().toISOString()),
+  };
+}
+
+function demoApprovalDetail(approvalId: string): ApprovalDetailRecord | null {
+  const approval = demoApprovals.find((item) => item.id === approvalId);
+  if (!approval) {
+    return null;
+  }
+
+  const riskClass = riskClassFromLabel(approval.risk);
+  const payload = {
+    approvalId: approval.id,
+    actionType: approval.type,
+    requester: approval.requester,
+    executionMode: "blocked_demo_only",
+  };
+  const policyEvaluation = evaluateApprovalPolicy({
+    actionKey: approval.type,
+    riskClass,
+    payload,
+    organisationSettings: { approval_mode: "demo_safe" },
+  });
+
+  return {
+    approval: {
+      ...approval,
+      status: "pending",
+      payload,
+      payloadHash: policyEvaluation.payloadHash,
+      policyKey: policyEvaluation.policyKey,
+      policyName: policyEvaluation.policyName,
+      requiredReviewerCount: policyEvaluation.requiredReviewerCount,
+      approvedReviewerCount: 0,
+      executionStatus: "not_requested",
+    },
+    policyEvaluation,
+    decisions: [],
+    executionChecks: [],
   };
 }
 
@@ -592,6 +682,86 @@ export async function getApprovals() {
 export async function getApprovalById(id: string) {
   const allApprovals = await getApprovals();
   return allApprovals.find((approval) => approval.id === id);
+}
+
+export async function getApprovalDetailById(id: string): Promise<ApprovalDetailRecord | null> {
+  const context = await getLiveContext();
+  if (!context?.organisationId) {
+    return demoApprovalDetail(id);
+  }
+
+  const [{ data: approvalRecord, error }, { data: organisation }] = await Promise.all([
+    context.supabase
+      .schema("staffer")
+      .from("approvals")
+      .select(
+        "*, approval_policies(key, name, minimum_risk_class, required_reviewer_count, requires_separation_of_duties, exact_payload_required, expires_after_minutes)",
+      )
+      .eq("organisation_id", context.organisationId)
+      .eq("id", id)
+      .maybeSingle(),
+    context.supabase
+      .schema("staffer")
+      .from("organisations")
+      .select("settings")
+      .eq("id", context.organisationId)
+      .maybeSingle(),
+  ]);
+
+  if (error || !approvalRecord) {
+    return null;
+  }
+
+  const approvalJson = approvalRecord as JsonRecord;
+  const approval = mapApproval(approvalJson);
+  const payload = approval.payload ?? {};
+  const riskClass = typeof approvalJson.risk_class === "number" ? approvalJson.risk_class : riskClassFromLabel(approval.risk);
+  const policyRecord = asNestedRecord(approvalJson.approval_policies);
+  const policyEvaluation = evaluateApprovalPolicy({
+    actionKey: approval.type,
+    riskClass,
+    payload,
+    organisationSettings: asJsonObject(organisation?.settings),
+    policy: policyRecord
+      ? {
+          key: String(policyRecord.key ?? "approval.policy"),
+          name: String(policyRecord.name ?? "Approval policy"),
+          minimumRiskClass: Number(policyRecord.minimum_risk_class ?? 1),
+          requiredReviewerCount: Number(policyRecord.required_reviewer_count ?? approval.requiredReviewerCount ?? 1),
+          requiresSeparationOfDuties: policyRecord.requires_separation_of_duties !== false,
+          exactPayloadRequired: policyRecord.exact_payload_required !== false,
+          expiresAfterMinutes: Number(policyRecord.expires_after_minutes ?? 1440),
+        }
+      : undefined,
+  });
+
+  const [decisionsResult, executionChecksResult] = await Promise.all([
+    context.supabase
+      .schema("staffer")
+      .from("approval_decisions")
+      .select("id, decision, comment, decided_by, decided_at, payload_hash_at_decision")
+      .eq("organisation_id", context.organisationId)
+      .eq("approval_id", approval.id)
+      .order("decided_at", { ascending: false }),
+    context.supabase
+      .schema("staffer")
+      .from("approval_execution_checks")
+      .select("id, expected_payload_hash, actual_payload_hash, verified, status, failure_reason, checked_by, checked_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("approval_id", approval.id)
+      .order("checked_at", { ascending: false }),
+  ]);
+
+  return {
+    approval,
+    policyEvaluation: {
+      ...policyEvaluation,
+      payloadHash: approval.payloadHash ?? policyEvaluation.payloadHash,
+      requiredReviewerCount: approval.requiredReviewerCount ?? policyEvaluation.requiredReviewerCount,
+    },
+    decisions: (decisionsResult.data ?? []).map((record) => mapApprovalDecision(record as JsonRecord)),
+    executionChecks: (executionChecksResult.data ?? []).map((record) => mapApprovalExecutionCheck(record as JsonRecord)),
+  };
 }
 
 export async function getDashboardData() {

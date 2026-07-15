@@ -154,6 +154,55 @@ export const approvalRecordSchema = z.object({
   type: nonEmptyString,
   risk: nonEmptyString,
   submitted: nonEmptyString,
+  status: nonEmptyString.optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  payloadHash: nonEmptyString.optional(),
+  policyKey: nonEmptyString.optional(),
+  policyName: nonEmptyString.optional(),
+  requiredReviewerCount: z.number().int().positive().optional(),
+  approvedReviewerCount: z.number().int().nonnegative().optional(),
+  executionStatus: nonEmptyString.optional(),
+  executionPayloadHash: z.string().trim().optional(),
+  executionVerifiedAt: z.string().trim().optional(),
+});
+
+export const approvalDecisionSchema = z.object({
+  id: nonEmptyString,
+  decision: nonEmptyString,
+  comment: z.string().trim().optional(),
+  decidedBy: nonEmptyString.optional(),
+  decidedAt: nonEmptyString,
+  payloadHashAtDecision: nonEmptyString,
+});
+
+export const approvalExecutionCheckSchema = z.object({
+  id: nonEmptyString,
+  expectedPayloadHash: nonEmptyString,
+  actualPayloadHash: nonEmptyString,
+  verified: z.boolean(),
+  status: nonEmptyString,
+  failureReason: z.string().trim().optional(),
+  checkedBy: nonEmptyString.optional(),
+  checkedAt: nonEmptyString,
+});
+
+export const approvalPolicyEvaluationSchema = z.object({
+  policyKey: nonEmptyString,
+  policyName: nonEmptyString,
+  requiresApproval: z.boolean(),
+  requiredReviewerCount: z.number().int().positive(),
+  exactPayloadRequired: z.boolean(),
+  requiresSeparationOfDuties: z.boolean(),
+  expiresAfterMinutes: z.number().int().positive(),
+  reasons: stringList,
+  payloadHash: nonEmptyString,
+});
+
+export const approvalDetailRecordSchema = z.object({
+  approval: approvalRecordSchema,
+  policyEvaluation: approvalPolicyEvaluationSchema,
+  decisions: z.array(approvalDecisionSchema),
+  executionChecks: z.array(approvalExecutionCheckSchema),
 });
 
 export const agentProfilesSchema = z.array(agentProfileSchema);
@@ -173,3 +222,7 @@ export type TaskDependency = z.infer<typeof taskDependencySchema>;
 export type TaskEvidenceEvent = z.infer<typeof taskEvidenceEventSchema>;
 export type TaskWatcher = z.infer<typeof taskWatcherSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;
+export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
+export type ApprovalDetailRecord = z.infer<typeof approvalDetailRecordSchema>;
+export type ApprovalExecutionCheck = z.infer<typeof approvalExecutionCheckSchema>;
+export type ApprovalPolicyEvaluation = z.infer<typeof approvalPolicyEvaluationSchema>;

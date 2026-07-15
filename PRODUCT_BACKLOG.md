@@ -38,10 +38,10 @@ The current app shows the shape of that product, but most screens are still stat
 - [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step limits. Added organisation guardrail defaults, per-agent runtime routing and limits, prohibited actions, approval rules, live schema constraints, audit-aware settings updates, and static/live verification.
 - [x] PB-019: Add profile image upload or generated-avatar support and founder confirmation workflow for draft personas. Added generated-avatar metadata/rendering, preserved reviewed image-path support, implemented founder confirm/request-changes actions and version rollback from immutable snapshots.
 - [x] PB-020: Implement task comments, dependencies, watchers, retries, and evidence timelines. Added tenant-scoped collaboration tables with explicit RLS/grants, retry metadata on tasks, live repository reads, task detail panels, server actions, evidence events, and audit logging.
+- [x] PB-021: Implement the approval policy engine and exact-payload execution checks. Added tenant approval policies, policy snapshots, reviewer-count decisions, canonical payload hashing, append-only decision/execution records, and database-enforced execution verification.
 
 ### Later: build the governed AI workforce
 
-- [ ] PB-021: Implement the approval policy engine and exact-payload execution checks.
 - [ ] PB-022: Implement the server-only AI provider router with fallback, guardrails, and structured output.
 - [ ] PB-023: Implement durable workflow execution, pause, resume, retry, and replay.
 - [ ] PB-024: Implement knowledge ingestion, retrieval, citations, retention, and access control.

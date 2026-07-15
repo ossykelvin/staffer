@@ -6,7 +6,9 @@ const requiredFiles = [
   "supabase/migrations/20260715184936_phase2_tool_registry_permissions.sql",
   "supabase/migrations/20260715191154_phase2_agent_guardrails.sql",
   "supabase/migrations/20260715193703_phase3_task_collaboration.sql",
+  "supabase/migrations/20260715195016_phase7_approval_policy_engine.sql",
   "src/proxy.ts",
+  "src/lib/approvals/policy.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
   "src/app/login/page.tsx",
@@ -97,6 +99,23 @@ const requiredTaskCollaborationSql = [
   "create policy task_evidence_events_operator_insert",
 ];
 
+const requiredApprovalPolicySql = [
+  "create table if not exists staffer.approval_policies",
+  "create table if not exists staffer.approval_decisions",
+  "create table if not exists staffer.approval_execution_checks",
+  "alter table staffer.approval_policies enable row level security",
+  "alter table staffer.approval_decisions enable row level security",
+  "alter table staffer.approval_execution_checks enable row level security",
+  "create policy approval_policies_member_select",
+  "create policy approval_decisions_reviewer_insert",
+  "create policy approval_execution_checks_operator_insert",
+  "create or replace function staffer.approval_payload_hash",
+  "create or replace function staffer.verify_approval_execution",
+  "revoke all on function staffer.verify_approval_execution",
+  "grant execute on function staffer.verify_approval_execution",
+  "payload_hash = staffer.approval_payload_hash(action_payload)",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -145,8 +164,15 @@ for (const phrase of requiredTaskCollaborationSql) {
   }
 }
 
+const approvalPolicySql = readFileSync("supabase/migrations/20260715195016_phase7_approval_policy_engine.sql", "utf8").toLowerCase();
+for (const phrase of requiredApprovalPolicySql) {
+  if (!approvalPolicySql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required approval policy SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getWorkflows", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getApprovalDetailById", "getWorkflows", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
@@ -170,6 +196,20 @@ const settingsActions = readFileSync("src/app/settings/actions.ts", "utf8");
 for (const phrase of ["createInvitationAction", "storeIntegrationSecretAction", "encryptIntegrationSecret", "organisation.settings_updated", "default_autonomy_level", "default_maximum_steps", "default_input_token_limit", "default_output_token_limit"]) {
   if (!settingsActions.includes(phrase)) {
     throw new Error(`Missing settings action phrase: ${phrase}`);
+  }
+}
+
+const approvalActions = readFileSync("src/app/approvals/[id]/actions.ts", "utf8");
+for (const phrase of ["stageApprovalDecisionAction", "verifyApprovalExecutionAction", "approval_decisions", "verify_approval_execution", "approval.execution_verified", "approval.execution_blocked"]) {
+  if (!approvalActions.includes(phrase)) {
+    throw new Error(`Missing approval policy action phrase: ${phrase}`);
+  }
+}
+
+const approvalPolicy = readFileSync("src/lib/approvals/policy.ts", "utf8");
+for (const phrase of ["evaluateApprovalPolicy", "approvalPayloadHash", "verifyExactApprovalPayload", "canonicalJson"]) {
+  if (!approvalPolicy.includes(phrase)) {
+    throw new Error(`Missing approval policy helper phrase: ${phrase}`);
   }
 }
 

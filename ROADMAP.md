@@ -30,6 +30,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step/token limits — added organisation default guardrail settings, per-agent runtime routing/limits, prohibited actions and approval rules with live migration `phase2_agent_guardrails`
 - [x] PB-019: Agent rollback, generated avatars and founder confirmation — added append-only rollback actions, generated avatar metadata/rendering and explicit founder confirmation/request-changes workflow with audit events
 - [x] PB-020: Task comments, dependencies, watchers, retries and evidence timelines — added tenant-scoped collaboration tables with RLS, task retry metadata, live repository reads, server-action mutations, audit events and task detail UI panels
+- [x] PB-021: Approval policy engine and exact-payload execution checks — added tenant approval policies, append-only decision/execution check records, canonical payload hashing, live policy detail UI, reviewer-count decisions and database-enforced execution verification
 
 ## Current first-draft scope
 
@@ -137,11 +138,11 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 7 — Approval centre
 
-- [ ] Implement policy-driven approval creation
+- [x] Implement policy-driven approval creation — PB-021 added tenant-owned approval policies, policy snapshots and required reviewer counts for approval requests
 - [ ] Support one-person, multi-person and sequential approvals
-- [ ] Store evidence, proposed action and exact payload to be executed
+- [x] Store evidence, proposed action and exact payload to be executed — approval detail pages now show the exact approved payload and canonical payload hash
 - [ ] Add approve, reject, request changes, delegate and expire actions
-- [ ] Verify approval at execution time; do not trust a model's claim of approval
+- [x] Verify approval at execution time; do not trust a model's claim of approval — `staffer.verify_approval_execution` checks approved status, expiry and exact payload hash before protected execution can proceed
 - [ ] Add separation-of-duties rules for high-risk actions
 - [ ] Add mobile-friendly approval notifications
 - [ ] Add immutable decision history and reviewer comments

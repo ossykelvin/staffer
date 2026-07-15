@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "verify:approval-policy": "node scripts/verify-approval-policy.mjs",
     "verify:live-foundation": "node scripts/verify-live-foundation.mjs",
     "check": "npm run lint && npm run typecheck && npm run build"
   },

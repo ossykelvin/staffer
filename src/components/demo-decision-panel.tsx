@@ -57,9 +57,9 @@ export function DemoDecisionPanel({
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Decision controls</p>
-      <h2 className="mt-3 font-semibold text-white">Stage a demo decision</h2>
+      <h2 className="mt-3 font-semibold text-white">Record a governed decision</h2>
       <p className="mt-2 text-sm leading-6 text-slate-500">
-        Live execution is blocked until tenant repositories, exact-payload checks, and append-only audit logging exist.
+        Decisions are recorded before execution. Protected actions still need exact-payload verification after approval.
       </p>
       <div className="mt-5 flex flex-wrap gap-2">
         {decisions.map((decision) => (
@@ -76,7 +76,7 @@ export function DemoDecisionPanel({
       {selected ? (
         <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4">
           <p className="text-sm text-slate-300">
-            Confirm demo decision: <span className="font-semibold text-white">{selected.label}</span>
+            Confirm decision: <span className="font-semibold text-white">{selected.label}</span>
           </p>
           <div className="mt-4 flex gap-2">
             <button
