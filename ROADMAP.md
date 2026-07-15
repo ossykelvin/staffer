@@ -39,7 +39,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [x] PB-025: Customer Support Triage live workflow — added tenant-owned support triage settings, manual intake, queued task creation, durable workflow start, Anna-style classification, approved knowledge retrieval, citation-backed draft response, specialist routing flags, approval request creation and workflow-console case tracking
 - [x] PB-025A: Approved Brevo support email execution — added exact-payload verified support response sending from approved Anna drafts, duplicate-send blocking, Brevo failure handling, support case/task/workflow/audit updates and live `sent` state migration
-- [x] PB-025B: Signup and onboarding welcome email reliability — added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth logs, onboarding welcome audit events and dashboard feedback for welcome delivery state
+- [x] PB-025B: Signup and onboarding welcome email reliability — added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth logs, onboarding welcome audit events, dashboard feedback for welcome delivery state and an email-provider env normalization hotfix
 
 ## Current first-draft scope
 

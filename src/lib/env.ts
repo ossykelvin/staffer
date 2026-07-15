@@ -145,7 +145,18 @@ export function getGovernanceEnv(environment: NodeJS.ProcessEnv = process.env) {
   return governanceEnvSchema.parse(environment);
 }
 
-const emailProviderSchema = z.enum(["brevo"]);
+const normalizeProviderValue = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  const unquoted = trimmed.match(/^["'](.+)["']$/)?.[1] ?? trimmed;
+
+  return unquoted.trim().toLowerCase();
+};
+
+const emailProviderSchema = z.preprocess(normalizeProviderValue, z.enum(["brevo"]));
 
 export const emailEnvSchema = z
   .object({

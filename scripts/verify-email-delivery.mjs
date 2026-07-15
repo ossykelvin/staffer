@@ -15,6 +15,12 @@ for (const phrase of ["emailEnvSchema", "EMAIL_PROVIDER", "BREVO_API_KEY", "BREV
   }
 }
 
+for (const phrase of ["normalizeProviderValue", ".toLowerCase()", "z.preprocess(normalizeProviderValue"]) {
+  if (!env.includes(phrase)) {
+    throw new Error(`Missing email provider normalization phrase: ${phrase}`);
+  }
+}
+
 const provider = readFileSync("src/lib/email/provider.ts", "utf8");
 for (const phrase of ["import \"server-only\"", "sendTransactionalEmail", "https://api.brevo.com/v3/smtp/email", "api-key", "getEmailConfigurationStatus"]) {
   if (!provider.includes(phrase)) {
