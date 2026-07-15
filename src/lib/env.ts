@@ -10,6 +10,12 @@ const blankAsUndefined = (value: unknown) => {
 };
 const optionalString = z.preprocess(blankAsUndefined, nonEmptyString.optional());
 const optionalUrl = z.preprocess(blankAsUndefined, z.string().url().optional());
+const positiveIntegerWithDefault = (defaultValue: number) =>
+  z.preprocess(blankAsUndefined, z.coerce.number().int().positive().default(defaultValue));
+const nonNegativeNumberWithDefault = (defaultValue: number) =>
+  z.preprocess(blankAsUndefined, z.coerce.number().min(0).default(defaultValue));
+const ratioWithDefault = (defaultValue: number) =>
+  z.preprocess(blankAsUndefined, z.coerce.number().min(0).max(1).default(defaultValue));
 
 export const publicEnvSchema = z.object({
   NEXT_PUBLIC_APP_NAME: nonEmptyString,
@@ -37,6 +43,7 @@ const aiProviderSchema = z.enum(["google", "openrouter"]);
 
 export const aiEnvSchema = z
   .object({
+    NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]).optional(),
     AI_PRIMARY_PROVIDER: aiProviderSchema,
     AI_FALLBACK_PROVIDER: aiProviderSchema,
     AI_PRIMARY_MODEL: nonEmptyString,
@@ -45,10 +52,19 @@ export const aiEnvSchema = z
     OPENROUTER_API_KEY: optionalString,
     OPENROUTER_BASE_URL: optionalUrl,
     OPENROUTER_PROVIDER_NAME: optionalString,
-    AI_DEFAULT_MAX_STEPS: z.coerce.number().int().positive(),
-    AI_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1),
+    AI_DEFAULT_MAX_STEPS: positiveIntegerWithDefault(8),
+    AI_DEFAULT_TIMEOUT_MS: positiveIntegerWithDefault(30_000),
+    AI_DEFAULT_MAX_OUTPUT_TOKENS: positiveIntegerWithDefault(1_200),
+    AI_CONFIDENCE_THRESHOLD: ratioWithDefault(0.75),
+    AI_MAX_COST_PER_RUN_USD: nonNegativeNumberWithDefault(1),
+    AI_COST_PER_1K_INPUT_TOKENS_USD: nonNegativeNumberWithDefault(0),
+    AI_COST_PER_1K_OUTPUT_TOKENS_USD: nonNegativeNumberWithDefault(0),
   })
   .superRefine((env, ctx) => {
+    if (env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      return;
+    }
+
     const configuredProviders = new Set([env.AI_PRIMARY_PROVIDER, env.AI_FALLBACK_PROVIDER]);
 
     if (configuredProviders.has("google") && !env.GOOGLE_GENERATIVE_AI_API_KEY) {

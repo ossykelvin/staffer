@@ -93,16 +93,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 4 — AI runtime
 
-- [ ] Implement server-only provider router using configured primary and fallback providers
-- [ ] Implement structured output schemas with Zod
-- [ ] Implement reusable `ToolLoopAgent` factory for bounded specialist tasks
-- [ ] Add stop conditions, maximum steps, timeout and cost guardrails
-- [ ] Add provider retry and fallback with error classification
-- [ ] Record prompts, redacted inputs, outputs, tool calls, token usage, latency and cost
-- [ ] Add prompt injection and data-exfiltration checks
-- [ ] Add confidence scoring and mandatory escalation thresholds
-- [ ] Add model selection settings by role and task type
-- [ ] Add evaluation fixtures for each agent role
+- [x] Implement server-only provider router using configured primary and fallback providers — PB-022 added a server-only governed AI runtime with Gemini/OpenRouter routes from env/model-selection settings and demo-safe deterministic execution.
+- [x] Implement structured output schemas with Zod — PB-022 added reusable governed output, risk flag, action, evidence and request schemas.
+- [x] Implement reusable `ToolLoopAgent` factory for bounded specialist tasks — PB-022 added a bounded factory that applies configured model, step, timeout and output-token limits.
+- [x] Add stop conditions, maximum steps, timeout and cost guardrails — PB-022 enforces configured step count, timeout, output token and per-run cost limits.
+- [x] Add provider retry and fallback with error classification — PB-022 classifies auth, timeout, rate-limit, provider, validation and safety errors before fallback.
+- [x] Record prompts, redacted inputs, outputs, tool calls, token usage, latency and cost — PB-022 emits audit-ready records and persists them through the append-only audit helper when context is available.
+- [x] Add prompt injection and data-exfiltration checks — PB-022 blocks critical injection/exfiltration patterns before provider access.
+- [x] Add confidence scoring and mandatory escalation thresholds — PB-022 escalates low-confidence or model-marked outputs using configured thresholds.
+- [x] Add model selection settings by role and task type — PB-022 accepts role/task-specific runtime overrides for provider, model and guardrail limits.
+- [x] Add evaluation fixtures for each agent role — PB-022 added one structured AI evaluation fixture for every seeded agent role.
 
 **Acceptance:** A test task can run through Gemini, fail safely to OpenRouter, emit validated output and create a complete audit record.
 

@@ -9,6 +9,10 @@ const requiredFiles = [
   "supabase/migrations/20260715195016_phase7_approval_policy_engine.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
+  "src/lib/ai/provider.ts",
+  "src/lib/ai/guardrails.ts",
+  "src/lib/ai/schemas.ts",
+  "src/config/ai-evaluations.seed.json",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
   "src/app/login/page.tsx",
@@ -116,6 +120,20 @@ const requiredApprovalPolicySql = [
   "payload_hash = staffer.approval_payload_hash(action_payload)",
 ];
 
+const requiredAiRuntimePhrases = [
+  'import "server-only"',
+  "runGovernedAiGeneration",
+  "runGovernedStafferGeneration",
+  "createBoundedToolLoopAgent",
+  "Output.object",
+  "generateText",
+  "stepCountIs",
+  "classifyProviderError",
+  "inspectPromptForGuardrails",
+  "recordAuditEvent",
+  "AI_MAX_COST_PER_RUN_USD",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -210,6 +228,13 @@ const approvalPolicy = readFileSync("src/lib/approvals/policy.ts", "utf8");
 for (const phrase of ["evaluateApprovalPolicy", "approvalPayloadHash", "verifyExactApprovalPayload", "canonicalJson"]) {
   if (!approvalPolicy.includes(phrase)) {
     throw new Error(`Missing approval policy helper phrase: ${phrase}`);
+  }
+}
+
+const aiRuntime = readFileSync("src/lib/ai/provider.ts", "utf8");
+for (const phrase of requiredAiRuntimePhrases) {
+  if (!aiRuntime.includes(phrase)) {
+    throw new Error(`Missing AI runtime phrase: ${phrase}`);
   }
 }
 

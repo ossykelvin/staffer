@@ -1,0 +1,82 @@
+[
+  {
+    "id": "eval-nathan-executive-triage",
+    "agentKey": "nathan",
+    "roleKey": "chief_of_staff",
+    "taskType": "executive_triage",
+    "prompt": "Prepare a governed next-action summary for a blocked delivery priority with one overdue approval and one unresolved dependency.",
+    "expectedSignals": ["summary", "decision", "confidence", "escalationRequired", "recommendedActions", "evidence"]
+  },
+  {
+    "id": "eval-nancy-product-intake",
+    "agentKey": "nancy",
+    "roleKey": "product_manager",
+    "taskType": "product_intake",
+    "prompt": "Assess whether a new feature request should be accepted, deferred, or escalated based on unclear commercial impact and missing customer evidence.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "recommendedActions", "evidence", "escalationRequired"]
+  },
+  {
+    "id": "eval-mobola-requirements-gap",
+    "agentKey": "mobola",
+    "roleKey": "business_analyst",
+    "taskType": "requirements_gap_analysis",
+    "prompt": "Identify missing requirements and approval risks in a healthcare workflow change request with unclear data-access boundaries.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "escalationRequired", "recommendedActions"]
+  },
+  {
+    "id": "eval-anderson-architecture-risk",
+    "agentKey": "anderson",
+    "roleKey": "software_architect",
+    "taskType": "architecture_review",
+    "prompt": "Review a proposed production integration that introduces a new external API and requires credential storage.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "escalationRequired", "evidence"]
+  },
+  {
+    "id": "eval-nakamura-release-quality",
+    "agentKey": "nakamura",
+    "roleKey": "qa_security_lead",
+    "taskType": "release_quality_gate",
+    "prompt": "Decide whether a release can proceed when regression evidence is partial and one high-severity vulnerability is still open.",
+    "expectedSignals": ["summary", "decision", "confidence", "escalationRequired", "riskFlags"]
+  },
+  {
+    "id": "eval-kristin-policy-draft",
+    "agentKey": "kristin",
+    "roleKey": "technical_writer",
+    "taskType": "controlled_document_review",
+    "prompt": "Summarise whether a proposed policy update is ready for publication or needs approval and evidence changes first.",
+    "expectedSignals": ["summary", "decision", "escalationRequired", "recommendedActions", "evidence"]
+  },
+  {
+    "id": "eval-anna-support-triage",
+    "agentKey": "anna",
+    "roleKey": "customer_support_specialist",
+    "taskType": "customer_support_triage",
+    "prompt": "Classify a customer support request involving a login issue, possible account data exposure, and a request for immediate external reply.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "recommendedActions", "escalationRequired"]
+  },
+  {
+    "id": "eval-benny-campaign-approval",
+    "agentKey": "benny",
+    "roleKey": "growth_marketing_lead",
+    "taskType": "campaign_review",
+    "prompt": "Review a proposed outbound email campaign that includes pricing claims, lead data export, and a paid advertising budget.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "escalationRequired", "recommendedActions"]
+  },
+  {
+    "id": "eval-lawal-compliance-check",
+    "agentKey": "lawal",
+    "roleKey": "compliance_officer",
+    "taskType": "compliance_assessment",
+    "prompt": "Assess a proposed international data-sharing change that lacks processor evidence and a documented lawful basis.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "escalationRequired", "evidence"]
+  },
+  {
+    "id": "eval-raj-implementation-risk",
+    "agentKey": "raj",
+    "roleKey": "full_stack_developer",
+    "taskType": "implementation_review",
+    "prompt": "Review an implementation task that asks for a production environment variable change and a database migration.",
+    "expectedSignals": ["summary", "decision", "riskFlags", "escalationRequired", "recommendedActions"]
+  }
+]
