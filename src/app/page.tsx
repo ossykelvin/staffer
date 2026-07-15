@@ -6,8 +6,12 @@ import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { getDashboardData } from "@/lib/repositories/staffer";
 
-export default async function HomePage() {
-  const { agents, approvals, tasks } = await getDashboardData();
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; message?: string }>;
+}) {
+  const [{ agents, approvals, tasks }, params] = await Promise.all([getDashboardData(), searchParams]);
   const activeTasks = tasks.filter((task) => task.status !== "Completed");
 
   return (
@@ -25,6 +29,8 @@ export default async function HomePage() {
           </Link>
         }
       />
+      {params.error ? <div className="mb-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-5 text-sm text-rose-100">{params.error}</div> : null}
+      {params.message ? <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/8 p-5 text-sm text-emerald-100">{params.message}</div> : null}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Active agents" value={String(agents.length)} note="Open the staff directory" icon={Icons.agents} href="/agents" />
         <MetricCard label="Open work" value={String(activeTasks.length)} note="Review the task board" icon={Icons.inbox} href="/tasks" />

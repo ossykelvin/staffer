@@ -39,6 +39,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [x] PB-025: Customer Support Triage live workflow — added tenant-owned support triage settings, manual intake, queued task creation, durable workflow start, Anna-style classification, approved knowledge retrieval, citation-backed draft response, specialist routing flags, approval request creation and workflow-console case tracking
 - [x] PB-025A: Approved Brevo support email execution — added exact-payload verified support response sending from approved Anna drafts, duplicate-send blocking, Brevo failure handling, support case/task/workflow/audit updates and live `sent` state migration
+- [x] PB-025B: Signup and onboarding welcome email reliability — added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth logs, onboarding welcome audit events and dashboard feedback for welcome delivery state
 
 ## Current first-draft scope
 
@@ -59,7 +60,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [x] Create Supabase project and dedicated `staffer` schema — connected to Supabase project `okkyvhkcpoyrflswatax`; applied Staffer schema via managed migrations
 - [x] Apply migration and verify all tables, indexes and policies — applied `staffer_core`, `staffer_live_foundation`, `phase1_identity_completion`, `phase1_policy_advisor_cleanup`, and `expose_staffer_data_api_schema`; verified all 16 Staffer tables have RLS and policies
-- [x] Implement Supabase Auth with email/password and password reset flow — sign-in/sign-up existed; added reset request, token confirmation route, and authenticated password update page
+- [x] Implement Supabase Auth with email/password and password reset flow — sign-in/sign-up existed; added reset request, token confirmation route, authenticated password update page, structured signup diagnostics and Brevo-backed welcome email coverage
 - [x] Create organisation onboarding and founder/admin membership — implemented onboarding RPC and live founder membership audit trail
 - [x] Implement tenant-aware server data access layer — repository layer reads live tenant-scoped Supabase records with authenticated membership context
 - [x] Replace JSON demonstration loaders with database repositories — pages/API use repositories with seed fallback for static params and demo parity

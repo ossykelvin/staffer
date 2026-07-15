@@ -20,6 +20,8 @@ const requiredFiles = [
   "src/config/ai-evaluations.seed.json",
   "src/lib/repositories/staffer.ts",
   "src/lib/audit.ts",
+  "src/lib/email/identity.ts",
+  "src/lib/observability/log.ts",
   "src/app/login/page.tsx",
   "src/app/onboarding/page.tsx",
   "src/app/auth/reset-password/page.tsx",
@@ -300,6 +302,20 @@ const settingsActions = readFileSync("src/app/settings/actions.ts", "utf8");
 for (const phrase of ["createInvitationAction", "storeIntegrationSecretAction", "encryptIntegrationSecret", "organisation.settings_updated", "default_autonomy_level", "default_maximum_steps", "default_input_token_limit", "default_output_token_limit"]) {
   if (!settingsActions.includes(phrase)) {
     throw new Error(`Missing settings action phrase: ${phrase}`);
+  }
+}
+
+const loginActions = readFileSync("src/app/login/actions.ts", "utf8");
+for (const phrase of ["signUpAction", "sendSignupWelcomeEmail", "auth.signup_welcome_email.sent", "auth.signup_welcome_email.failed", "logStructured", "maskEmail"]) {
+  if (!loginActions.includes(phrase)) {
+    throw new Error(`Missing login identity email phrase: ${phrase}`);
+  }
+}
+
+const onboardingActions = readFileSync("src/app/onboarding/actions.ts", "utf8");
+for (const phrase of ["createOrganisationAction", "sendOrganisationWelcomeEmail", "identity.organisation_welcome_email_sent", "identity.organisation_welcome_email_failed", "recordAuditEvent"]) {
+  if (!onboardingActions.includes(phrase)) {
+    throw new Error(`Missing onboarding identity email phrase: ${phrase}`);
   }
 }
 
