@@ -79,6 +79,7 @@ export const agentProfileSchema = z.object({
 
 export const workflowDefinitionSchema = z.object({
   id: nonEmptyString,
+  databaseId: nonEmptyString.optional(),
   name: nonEmptyString,
   department: nonEmptyString,
   trigger: nonEmptyString,
@@ -86,6 +87,63 @@ export const workflowDefinitionSchema = z.object({
   steps: stringList,
   approval: nonEmptyString,
   sla: nonEmptyString,
+});
+
+export const workflowRunStepSchema = z.object({
+  id: nonEmptyString,
+  workflowRunId: nonEmptyString,
+  stepIndex: z.number().int().positive(),
+  stepKey: nonEmptyString,
+  stepName: nonEmptyString,
+  stepType: nonEmptyString,
+  status: nonEmptyString,
+  attempt: z.number().int().positive(),
+  maxAttempts: z.number().int().positive(),
+  idempotencyKey: nonEmptyString,
+  startedAt: z.string().trim().nullable().optional(),
+  completedAt: z.string().trim().nullable().optional(),
+  nextRetryAt: z.string().trim().nullable().optional(),
+  errorPayload: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const workflowRunEventSchema = z.object({
+  id: nonEmptyString,
+  workflowRunId: nonEmptyString,
+  stepRunId: nonEmptyString.nullable().optional(),
+  eventType: nonEmptyString,
+  title: nonEmptyString,
+  body: z.string().trim().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdBy: nonEmptyString.nullable().optional(),
+  createdAt: nonEmptyString,
+});
+
+export const workflowRunSchema = z.object({
+  id: nonEmptyString,
+  workflowId: nonEmptyString,
+  taskId: nonEmptyString.nullable().optional(),
+  status: nonEmptyString,
+  currentStep: z.string().trim().nullable().optional(),
+  currentStepIndex: z.number().int().nonnegative(),
+  triggerType: nonEmptyString,
+  idempotencyKey: nonEmptyString.nullable().optional(),
+  runKind: nonEmptyString,
+  retryCount: z.number().int().nonnegative(),
+  maxRetries: z.number().int().nonnegative(),
+  pauseReason: z.string().trim().nullable().optional(),
+  startedAt: z.string().trim().nullable().optional(),
+  completedAt: z.string().trim().nullable().optional(),
+  failedAt: z.string().trim().nullable().optional(),
+  cancelledAt: z.string().trim().nullable().optional(),
+  createdAt: nonEmptyString,
+  updatedAt: nonEmptyString,
+  steps: z.array(workflowRunStepSchema).optional(),
+  events: z.array(workflowRunEventSchema).optional(),
+});
+
+export const workflowExecutionDetailSchema = z.object({
+  runs: z.array(workflowRunSchema),
+  latestRun: workflowRunSchema.nullable(),
 });
 
 export const taskRecordSchema = z.object({
@@ -215,6 +273,10 @@ export type AgentSkill = z.infer<typeof agentSkillSchema>;
 export type AgentTool = z.infer<typeof agentToolSchema>;
 export type AgentVersion = z.infer<typeof agentVersionSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
+export type WorkflowRun = z.infer<typeof workflowRunSchema>;
+export type WorkflowRunStep = z.infer<typeof workflowRunStepSchema>;
+export type WorkflowRunEvent = z.infer<typeof workflowRunEventSchema>;
+export type WorkflowExecutionDetail = z.infer<typeof workflowExecutionDetailSchema>;
 export type TaskRecord = z.infer<typeof taskRecordSchema>;
 export type TaskCollaboration = z.infer<typeof taskCollaborationSchema>;
 export type TaskComment = z.infer<typeof taskCommentSchema>;

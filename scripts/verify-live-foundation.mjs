@@ -7,6 +7,7 @@ const requiredFiles = [
   "supabase/migrations/20260715191154_phase2_agent_guardrails.sql",
   "supabase/migrations/20260715193703_phase3_task_collaboration.sql",
   "supabase/migrations/20260715195016_phase7_approval_policy_engine.sql",
+  "supabase/migrations/20260715203228_phase6_workflow_execution.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
   "src/lib/ai/provider.ts",
@@ -28,6 +29,7 @@ const requiredFiles = [
   "src/app/settings/actions.ts",
   "src/app/approvals/[id]/actions.ts",
   "src/app/tasks/[id]/actions.ts",
+  "src/app/workflows/[id]/actions.ts",
 ];
 
 const requiredSql = [
@@ -134,6 +136,22 @@ const requiredAiRuntimePhrases = [
   "AI_MAX_COST_PER_RUN_USD",
 ];
 
+const requiredWorkflowExecutionSql = [
+  "create table if not exists staffer.workflow_run_steps",
+  "create table if not exists staffer.workflow_run_events",
+  "alter table staffer.workflow_run_steps enable row level security",
+  "alter table staffer.workflow_run_events enable row level security",
+  "grant select, insert, update on staffer.workflow_runs to authenticated",
+  "create policy workflow_run_steps_member_select",
+  "create policy workflow_run_events_operator_insert",
+  "create or replace function staffer.start_workflow_run",
+  "create or replace function staffer.transition_workflow_run",
+  "create or replace function staffer.replay_workflow_run",
+  "workflow_runs_org_idempotency_key_idx",
+  "resume_token",
+  "replay_of_run_id",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -189,8 +207,15 @@ for (const phrase of requiredApprovalPolicySql) {
   }
 }
 
+const workflowExecutionSql = readFileSync("supabase/migrations/20260715203228_phase6_workflow_execution.sql", "utf8").toLowerCase();
+for (const phrase of requiredWorkflowExecutionSql) {
+  if (!workflowExecutionSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required workflow execution SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
-for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getApprovalDetailById", "getWorkflows", "getDashboardData"]) {
+for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
     throw new Error(`Missing repository export: ${exportedName}`);
   }
@@ -228,6 +253,13 @@ const approvalPolicy = readFileSync("src/lib/approvals/policy.ts", "utf8");
 for (const phrase of ["evaluateApprovalPolicy", "approvalPayloadHash", "verifyExactApprovalPayload", "canonicalJson"]) {
   if (!approvalPolicy.includes(phrase)) {
     throw new Error(`Missing approval policy helper phrase: ${phrase}`);
+  }
+}
+
+const workflowActions = readFileSync("src/app/workflows/[id]/actions.ts", "utf8");
+for (const phrase of ["startWorkflowRunAction", "transitionWorkflowRunAction", "replayWorkflowRunAction", "start_workflow_run", "transition_workflow_run", "replay_workflow_run", "workflow.run_started", "workflow.replay_requested"]) {
+  if (!workflowActions.includes(phrase)) {
+    throw new Error(`Missing workflow execution action phrase: ${phrase}`);
   }
 }
 

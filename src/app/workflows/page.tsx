@@ -50,7 +50,7 @@ export default async function WorkflowsPage() {
                   </li>
                 ))}
               </ol>
-              <p className="mt-5 text-xs font-semibold text-blue-300">Open workflow dry-run -&gt;</p>
+              <p className="mt-5 text-xs font-semibold text-blue-300">Open workflow console -&gt;</p>
             </Link>
           ))}
         </div>

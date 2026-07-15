@@ -32,6 +32,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-020: Task comments, dependencies, watchers, retries and evidence timelines — added tenant-scoped collaboration tables with RLS, task retry metadata, live repository reads, server-action mutations, audit events and task detail UI panels
 - [x] PB-021: Approval policy engine and exact-payload execution checks — added tenant approval policies, append-only decision/execution check records, canonical payload hashing, live policy detail UI, reviewer-count decisions and database-enforced execution verification
 
+- [x] PB-022: Server-only AI provider router with fallback, guardrails and structured output — added governed AI runtime, Zod output contracts, provider fallback/error classification, prompt/data-exfiltration guardrails, confidence escalation, audit-ready telemetry and per-agent evaluation fixtures
+- [x] PB-023: Durable workflow execution, pause, resume, retry and replay — added live workflow run/step/event state, idempotent start, transition and replay RPCs, workflow execution console controls, repository reads, append-only events and static/live verification
+
 ## Current first-draft scope
 
 - [x] Next.js App Router application shell
@@ -123,16 +126,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 6 — Workflow engine and automation
 
-- [ ] Implement workflow definitions, versions, steps, conditions and transitions
-- [ ] Use durable workflows for waits, retries, webhook callbacks and long-running operations
+- [x] Implement workflow definitions, versions, steps, conditions and transitions — PB-023 added durable run records, workflow definition snapshots, idempotent step records and controlled run transitions; condition execution remains part of later workflow automation.
+- [ ] Use durable workflows for waits, retries, webhook callbacks and long-running operations — PB-023 added database-backed run durability, retry counters, pause/resume metadata and replay snapshots; webhook callback execution remains open.
 - [ ] Implement scheduled, manual, event and condition triggers
 - [ ] Add step types: agent, human, condition, parallel, delay, webhook, tool, approval and notification
-- [ ] Add workflow simulator and dry-run mode
+- [x] Add workflow simulator and dry-run mode — PB-005 added dry-run timelines and PB-023 kept them as a reference beside live run state.
 - [ ] Add idempotent webhook ingestion and signature verification
-- [ ] Add dead-letter handling and replay
+- [ ] Add dead-letter handling and replay — PB-023 added replay-from-snapshot support; dead-letter queues remain open.
 - [ ] Add visual workflow builder after JSON/database execution is stable
-- [ ] Add workflow run timeline and step-level logs
-- [ ] Add pause, resume, cancel and retry controls
+- [x] Add workflow run timeline and step-level logs — PB-023 added append-only workflow run events and step-ledger UI.
+- [x] Add pause, resume, cancel and retry controls — PB-023 added server actions, RPC transitions and workflow-console controls.
 
 **Acceptance:** A workflow survives a process failure, resumes from the correct step and never duplicates a protected action.
 

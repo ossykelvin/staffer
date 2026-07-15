@@ -15,4 +15,8 @@ export type {
   TaskRecord,
   TaskWatcher,
   WorkflowDefinition,
+  WorkflowExecutionDetail,
+  WorkflowRun,
+  WorkflowRunEvent,
+  WorkflowRunStep,
 } from "@/lib/schemas";

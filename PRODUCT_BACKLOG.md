@@ -43,7 +43,7 @@ The current app shows the shape of that product, but most screens are still stat
 ### Later: build the governed AI workforce
 
 - [x] PB-022: Implement the server-only AI provider router with fallback, guardrails, and structured output. Added server-only provider routing, AI SDK v6 structured outputs, guardrail blocking, retry/fallback classification, cost/timeout/step limits, confidence escalation, audit-ready run records, bounded `ToolLoopAgent` factory, env examples, static verification and per-agent evaluation fixtures.
-- [ ] PB-023: Implement durable workflow execution, pause, resume, retry, and replay.
+- [x] PB-023: Implement durable workflow execution, pause, resume, retry, and replay. Added live Supabase run/step/event state with RLS and Data API grants, idempotent start RPC, transition and replay RPCs, workflow execution repository reads, server actions for start/pause/resume/cancel/retry/replay, workflow console UI, static verification and live schema checks.
 - [ ] PB-024: Implement knowledge ingestion, retrieval, citations, retention, and access control.
 - [ ] PB-025: Launch the first live workflow: Customer Support Triage.
 - [ ] PB-026: Launch the second live workflow: Feature Intake to Engineering.

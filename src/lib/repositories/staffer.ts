@@ -2,7 +2,24 @@ import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, w
 import { evaluateApprovalPolicy } from "@/lib/approvals/policy";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentProfile, AgentSkill, AgentTool, AgentVersion, ApprovalDecision, ApprovalDetailRecord, ApprovalExecutionCheck, ApprovalRecord, TaskCollaboration, TaskDependency, TaskRecord, WorkflowDefinition } from "@/lib/types";
+import type {
+  AgentProfile,
+  AgentSkill,
+  AgentTool,
+  AgentVersion,
+  ApprovalDecision,
+  ApprovalDetailRecord,
+  ApprovalExecutionCheck,
+  ApprovalRecord,
+  TaskCollaboration,
+  TaskDependency,
+  TaskRecord,
+  WorkflowDefinition,
+  WorkflowExecutionDetail,
+  WorkflowRun,
+  WorkflowRunEvent,
+  WorkflowRunStep,
+} from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -297,6 +314,7 @@ function mapWorkflow(record: JsonRecord): WorkflowDefinition {
 
   return {
     id: String(record.key ?? record.id),
+    databaseId: typeof record.id === "string" ? record.id : undefined,
     name: String(record.name ?? "Untitled workflow"),
     department: String(definition.department ?? "Operations"),
     trigger: String(definition.trigger ?? record.description ?? "Manual trigger"),
@@ -304,6 +322,71 @@ function mapWorkflow(record: JsonRecord): WorkflowDefinition {
     steps: asStringArray(definition.steps),
     approval: String(definition.approval ?? "Configured by workflow policy"),
     sla: String(definition.sla ?? "Configured by organisation"),
+  };
+}
+
+function mapWorkflowRunStep(record: JsonRecord): WorkflowRunStep {
+  return {
+    id: String(record.id),
+    workflowRunId: String(record.workflow_run_id),
+    stepIndex: Number(record.step_index ?? 1),
+    stepKey: String(record.step_key ?? `step-${record.step_index ?? 1}`),
+    stepName: String(record.step_name ?? "Workflow step"),
+    stepType: String(record.step_type ?? "agent"),
+    status: String(record.status ?? "queued"),
+    attempt: Number(record.attempt ?? 1),
+    maxAttempts: Number(record.max_attempts ?? 3),
+    idempotencyKey: String(record.idempotency_key ?? record.id),
+    startedAt: typeof record.started_at === "string" ? record.started_at : null,
+    completedAt: typeof record.completed_at === "string" ? record.completed_at : null,
+    nextRetryAt: typeof record.next_retry_at === "string" ? record.next_retry_at : null,
+    errorPayload: asJsonObject(record.error_payload),
+  };
+}
+
+function mapWorkflowRunEvent(record: JsonRecord): WorkflowRunEvent {
+  return {
+    id: String(record.id),
+    workflowRunId: String(record.workflow_run_id),
+    stepRunId: typeof record.step_run_id === "string" ? record.step_run_id : null,
+    eventType: String(record.event_type ?? "workflow.event"),
+    title: String(record.title ?? "Workflow event"),
+    body: typeof record.body === "string" ? record.body : null,
+    metadata: asJsonObject(record.metadata),
+    createdBy: typeof record.created_by === "string" ? record.created_by : null,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapWorkflowRun(record: JsonRecord): WorkflowRun {
+  const steps = Array.isArray(record.workflow_run_steps)
+    ? record.workflow_run_steps.map((item) => mapWorkflowRunStep(item as JsonRecord)).sort((a, b) => a.stepIndex - b.stepIndex || a.attempt - b.attempt)
+    : undefined;
+  const events = Array.isArray(record.workflow_run_events)
+    ? record.workflow_run_events.map((item) => mapWorkflowRunEvent(item as JsonRecord))
+    : undefined;
+
+  return {
+    id: String(record.id),
+    workflowId: String(record.workflow_id),
+    taskId: typeof record.task_id === "string" ? record.task_id : null,
+    status: String(record.status ?? "queued"),
+    currentStep: typeof record.current_step === "string" ? record.current_step : null,
+    currentStepIndex: Number(record.current_step_index ?? 0),
+    triggerType: String(record.trigger_type ?? "manual"),
+    idempotencyKey: typeof record.idempotency_key === "string" ? record.idempotency_key : null,
+    runKind: String(record.run_kind ?? "original"),
+    retryCount: Number(record.retry_count ?? 0),
+    maxRetries: Number(record.max_retries ?? 3),
+    pauseReason: typeof record.pause_reason === "string" ? record.pause_reason : null,
+    startedAt: typeof record.started_at === "string" ? record.started_at : null,
+    completedAt: typeof record.completed_at === "string" ? record.completed_at : null,
+    failedAt: typeof record.failed_at === "string" ? record.failed_at : null,
+    cancelledAt: typeof record.cancelled_at === "string" ? record.cancelled_at : null,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+    updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
+    steps,
+    events,
   };
 }
 
@@ -392,6 +475,62 @@ function demoApprovalDetail(approvalId: string): ApprovalDetailRecord | null {
     policyEvaluation,
     decisions: [],
     executionChecks: [],
+  };
+}
+
+function demoWorkflowExecutionDetail(workflow: WorkflowDefinition): WorkflowExecutionDetail {
+  const now = new Date().toISOString();
+  const runId = `${workflow.id}-demo-run`;
+  const latestRun: WorkflowRun = {
+    id: runId,
+    workflowId: workflow.id,
+    status: "queued",
+    currentStep: workflow.steps[0] ?? null,
+    currentStepIndex: 0,
+    triggerType: "demo_manual",
+    idempotencyKey: `${workflow.id}:demo`,
+    runKind: "original",
+    retryCount: 0,
+    maxRetries: 3,
+    pauseReason: null,
+    startedAt: now,
+    completedAt: null,
+    failedAt: null,
+    cancelledAt: null,
+    createdAt: now,
+    updatedAt: now,
+    steps: workflow.steps.map((step, index) => ({
+      id: `${runId}-step-${index + 1}`,
+      workflowRunId: runId,
+      stepIndex: index + 1,
+      stepKey: step.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || `step-${index + 1}`,
+      stepName: step,
+      stepType: index === workflow.steps.length - 1 ? "action" : "agent",
+      status: index === 0 ? "queued" : "waiting",
+      attempt: 1,
+      maxAttempts: 3,
+      idempotencyKey: `${workflow.id}:demo:step:${index + 1}`,
+      startedAt: null,
+      completedAt: null,
+      nextRetryAt: null,
+      errorPayload: {},
+    })),
+    events: [
+      {
+        id: `${runId}-event-1`,
+        workflowRunId: runId,
+        eventType: "workflow.demo_loaded",
+        title: "Demo workflow execution preview",
+        body: "Live durable workflow runs are stored in Supabase when demo mode is disabled.",
+        metadata: { mode: "demo" },
+        createdAt: now,
+      },
+    ],
+  };
+
+  return {
+    latestRun,
+    runs: [latestRun],
   };
 }
 
@@ -661,6 +800,50 @@ export async function getWorkflows() {
 export async function getWorkflowById(id: string) {
   const allWorkflows = await getWorkflows();
   return allWorkflows.find((workflow) => workflow.id === id);
+}
+
+export async function getWorkflowExecutionDetail(workflowKey: string): Promise<WorkflowExecutionDetail> {
+  const workflow = await getWorkflowById(workflowKey);
+  const context = await getLiveContext();
+
+  if (!workflow || !context?.organisationId) {
+    return workflow ? demoWorkflowExecutionDetail(workflow) : { runs: [], latestRun: null };
+  }
+
+  const { data: workflowRecord, error: workflowError } = await context.supabase
+    .schema("staffer")
+    .from("workflows")
+    .select("id")
+    .eq("organisation_id", context.organisationId)
+    .eq("key", workflowKey)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (workflowError || !workflowRecord?.id) {
+    return { runs: [], latestRun: null };
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("workflow_runs")
+    .select(
+      "id, workflow_id, task_id, status, current_step, current_step_index, trigger_type, idempotency_key, run_kind, retry_count, max_retries, pause_reason, started_at, completed_at, failed_at, cancelled_at, created_at, updated_at, workflow_run_steps(id, workflow_run_id, step_index, step_key, step_name, step_type, status, attempt, max_attempts, idempotency_key, started_at, completed_at, next_retry_at, error_payload), workflow_run_events(id, workflow_run_id, step_run_id, event_type, title, body, metadata, created_by, created_at)",
+    )
+    .eq("organisation_id", context.organisationId)
+    .eq("workflow_id", workflowRecord.id)
+    .order("updated_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data) {
+    return { runs: [], latestRun: null };
+  }
+
+  const runs = data.map((record) => mapWorkflowRun(record as JsonRecord));
+  return {
+    runs,
+    latestRun: runs[0] ?? null,
+  };
 }
 
 export async function getApprovals() {
