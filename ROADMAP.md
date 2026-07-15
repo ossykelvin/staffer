@@ -181,7 +181,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — PB-025 flags Nakamura review requirements; actual reviewer decision capture remains open.
 - [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — PB-025 flags Lawal review requirements; actual compliance review capture remains open.
 - [x] Human approves external send — PB-025 creates a pending approval with exact payload hash for the support draft before any customer-visible action can proceed.
-- [ ] Send or create draft based on organisation policy — PB-025 records the response policy and approval-gated draft payload; Gmail draft/send execution remains open.
+- [ ] Send or create draft based on organisation policy — PB-025 records the response policy and approval-gated draft payload; Brevo server-only delivery credentials/provider are configured, while approved draft/send execution remains open.
 - [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — PB-025 records task evidence; Kristin documentation follow-up remains open.
 
 ### Feature Intake

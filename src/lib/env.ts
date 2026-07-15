@@ -10,6 +10,7 @@ const blankAsUndefined = (value: unknown) => {
 };
 const optionalString = z.preprocess(blankAsUndefined, nonEmptyString.optional());
 const optionalUrl = z.preprocess(blankAsUndefined, z.string().url().optional());
+const optionalEmail = z.preprocess(blankAsUndefined, z.string().email().optional());
 const positiveIntegerWithDefault = (defaultValue: number) =>
   z.preprocess(blankAsUndefined, z.coerce.number().int().positive().default(defaultValue));
 const nonNegativeNumberWithDefault = (defaultValue: number) =>
@@ -142,4 +143,47 @@ export const governanceEnvSchema = z.object({
 
 export function getGovernanceEnv(environment: NodeJS.ProcessEnv = process.env) {
   return governanceEnvSchema.parse(environment);
+}
+
+const emailProviderSchema = z.enum(["brevo"]);
+
+export const emailEnvSchema = z
+  .object({
+    NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]).optional(),
+    EMAIL_PROVIDER: emailProviderSchema.default("brevo"),
+    EMAIL_DEFAULT_FROM_EMAIL: optionalEmail,
+    EMAIL_DEFAULT_FROM_NAME: optionalString,
+    EMAIL_REPLY_TO_EMAIL: optionalEmail,
+    BREVO_API_KEY: optionalString,
+    BREVO_SMTP_HOST: optionalString,
+    BREVO_SMTP_PORT: positiveIntegerWithDefault(587),
+    BREVO_SMTP_USER: optionalString,
+    BREVO_SMTP_PASSWORD: optionalString,
+  })
+  .superRefine((env, ctx) => {
+    if (env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      return;
+    }
+
+    if (env.EMAIL_PROVIDER === "brevo" && !env.BREVO_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["BREVO_API_KEY"],
+        message: "Brevo is configured as the email provider, but BREVO_API_KEY is missing.",
+      });
+    }
+
+    if (!env.EMAIL_DEFAULT_FROM_EMAIL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["EMAIL_DEFAULT_FROM_EMAIL"],
+        message: "EMAIL_DEFAULT_FROM_EMAIL is required before live email can be sent.",
+      });
+    }
+  });
+
+export type EmailProvider = z.infer<typeof emailProviderSchema>;
+
+export function getEmailEnv(environment: NodeJS.ProcessEnv = process.env) {
+  return emailEnvSchema.parse(environment);
 }
