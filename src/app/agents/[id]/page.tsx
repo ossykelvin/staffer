@@ -1,16 +1,18 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   assignAgentSkillAction,
+  confirmAgentProfileAction,
   assignAgentToolAction,
   createSkillAction,
   createToolAction,
   removeAgentSkillAction,
   removeAgentToolAction,
+  rollbackAgentVersionAction,
   setAgentStatusAction,
   updateAgentAction,
 } from "@/app/agents/actions";
+import { AgentAvatar } from "@/components/agent-avatar";
 import { AgentProfileForm } from "@/components/agent-profile-form";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
@@ -65,15 +67,7 @@ export default async function AgentDetailPage({
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
           <div className="flex items-center gap-4">
-            {agent.avatarPath ? (
-              <span className="relative size-24 overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-xl shadow-blue-950/50">
-                <Image src={agent.avatarPath} alt={`${agent.name}, ${agent.jobTitle}`} fill priority sizes="96px" className="object-cover" />
-              </span>
-            ) : (
-              <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-blue-500 to-cyan-400 text-xl font-bold shadow-xl shadow-blue-950/50">
-                {agent.initials}
-              </span>
-            )}
+            <AgentAvatar agent={agent} size="lg" priority />
             <div>
               <h2 className="text-xl font-semibold">{agent.jobTitle}</h2>
               <p className="mt-1 text-sm text-slate-500">{agent.location}</p>
@@ -113,6 +107,10 @@ export default async function AgentDetailPage({
             <div>
               <dt className="text-xs uppercase tracking-wider text-slate-600">Version</dt>
               <dd className="mt-1 text-slate-300">v{agent.version ?? 1}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-slate-600">Avatar</dt>
+              <dd className="mt-1 text-slate-300">{agent.avatarMode ?? (agent.avatarPath ? "image_path" : "initials")}</dd>
             </div>
           </dl>
 
@@ -398,6 +396,10 @@ export default async function AgentDetailPage({
             <section className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.05] p-6">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Profile confirmed</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">This profile has been confirmed by the founder. Future edits should be versioned and recorded in the agent audit history.</p>
+              {agent.founderConfirmedAt ? (
+                <p className="mt-3 text-xs text-emerald-200">Confirmed {new Date(agent.founderConfirmedAt).toLocaleString("en-GB")}</p>
+              ) : null}
+              {agent.founderConfirmationNotes ? <p className="mt-3 text-sm leading-6 text-slate-400">{agent.founderConfirmationNotes}</p> : null}
             </section>
           ) : (
             <section className="rounded-2xl border border-violet-400/15 bg-violet-400/[0.05] p-6">
@@ -405,6 +407,41 @@ export default async function AgentDetailPage({
               <p className="mt-3 text-sm leading-6 text-slate-300">Confirm or replace this persona before enabling live agent execution.</p>
             </section>
           )}
+
+          <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold">Founder confirmation workflow</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Record whether this draft persona is approved for live use or needs another profile pass.</p>
+            <form action={confirmAgentProfileAction} className="mt-5 space-y-3">
+              <input type="hidden" name="key" value={agent.id} />
+              <label className="block text-sm text-slate-400">
+                Confirmation notes
+                <textarea
+                  name="notes"
+                  rows={3}
+                  placeholder="Why this profile is confirmed, or what needs changing."
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  name="profileStatus"
+                  value="founder_confirmed"
+                  className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                >
+                  Confirm profile
+                </button>
+                <button
+                  type="submit"
+                  name="profileStatus"
+                  value="needs_review"
+                  className="rounded-xl border border-violet-300/20 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-400/10"
+                >
+                  Request changes
+                </button>
+              </div>
+            </form>
+          </section>
 
           <section className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold">Version history</h2>
@@ -417,6 +454,17 @@ export default async function AgentDetailPage({
                       <p className="text-xs text-slate-500">{new Date(version.createdAt).toLocaleString("en-GB")}</p>
                     </div>
                     <p className="mt-2 text-sm text-slate-300">{version.changeSummary}</p>
+                    {version.version !== (agent.version ?? 1) ? (
+                      <form action={rollbackAgentVersionAction} className="mt-3">
+                        <input type="hidden" name="key" value={agent.id} />
+                        <input type="hidden" name="versionId" value={version.id} />
+                        <button type="submit" className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/7">
+                          Roll back to v{version.version}
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="mt-3 text-xs text-emerald-300">Current version</p>
+                    )}
                   </div>
                 ))
               ) : (

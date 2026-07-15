@@ -8,11 +8,14 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const adminRoles = new Set(["founder", "administrator"]);
 const agentStatuses = new Set(["draft", "active", "retired"]);
+const profileStatuses = new Set(["draft", "founder_confirmed", "needs_review"]);
+const avatarModes = new Set(["initials", "generated", "image_path"]);
 
 type AdminContext = {
   supabase: NonNullable<Awaited<ReturnType<typeof getSupabaseServerClient>>>;
   user: { id: string };
   organisationId: string;
+  role: string;
 };
 
 type AgentPayload = {
@@ -112,6 +115,10 @@ function jsonObjectValue(formData: FormData, key: string) {
   }
 }
 
+function asRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
 function redirectWithParams(path: string, params: Record<string, string>): never {
   const search = new URLSearchParams(params);
   redirect(`${path}?${search.toString()}`);
@@ -150,7 +157,7 @@ async function requireAdminContext(): Promise<AdminContext> {
     throw new Error("Founder or administrator membership is required.");
   }
 
-  return { supabase, user, organisationId: String(membership.organisation_id) };
+  return { supabase, user, organisationId: String(membership.organisation_id), role: String(membership.role) };
 }
 
 function buildAgentPayload(formData: FormData, organisationId: string, userId: string, version: number): AgentPayload {
@@ -160,6 +167,8 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
   const department = text(formData, "department");
   const summary = text(formData, "summary");
   const status = text(formData, "status") || "draft";
+  const profileStatus = text(formData, "profileStatus") || "draft";
+  const avatarMode = text(formData, "avatarMode") || (text(formData, "avatarPath") ? "image_path" : "initials");
   const autonomyLevel = Math.min(5, Math.max(0, intValue(formData, "autonomyLevel", 1)));
   const experienceYears = Math.max(0, intValue(formData, "experienceYears", 0));
   const avatarPath = text(formData, "avatarPath");
@@ -176,6 +185,14 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
     throw new Error("Agent status is not allowed.");
   }
 
+  if (!profileStatuses.has(profileStatus)) {
+    throw new Error("Profile status is not allowed.");
+  }
+
+  if (!avatarModes.has(avatarMode)) {
+    throw new Error("Avatar mode is not allowed.");
+  }
+
   if (avatarPath && !avatarPath.startsWith("/")) {
     throw new Error("Avatar path must start with / or be left blank.");
   }
@@ -185,11 +202,14 @@ function buildAgentPayload(formData: FormData, organisationId: string, userId: s
     location: text(formData, "location") || "Configured by organisation",
     timezone: text(formData, "timezone") || "Configured by organisation",
     experienceYears,
-    profileStatus: text(formData, "profileStatus") || "draft",
+    profileStatus,
     initials: text(formData, "initials") || name.slice(0, 2).toUpperCase(),
     accent: text(formData, "accent") || "blue",
+    avatarMode,
     avatarPath: avatarPath || undefined,
     avatarStyle: text(formData, "avatarStyle") || undefined,
+    avatarSeed: text(formData, "avatarSeed") || key,
+    avatarPrompt: text(formData, "avatarPrompt") || undefined,
     personality: textList(formData, "personality"),
     communicationStyle: text(formData, "communicationStyle") || "Configured by organisation",
     background: text(formData, "background") || undefined,
@@ -318,6 +338,10 @@ export async function updateAgentAction(formData: FormData) {
 
     const nextVersion = Number(existing.version ?? 1) + 1;
     const payload = buildAgentPayload(formData, context.organisationId, context.user.id, nextVersion);
+    payload.profile = {
+      ...asRecord(existing.profile),
+      ...payload.profile,
+    };
     const updatePayload: Partial<typeof payload> = { ...payload };
     delete updatePayload.created_by;
     delete updatePayload.organisation_id;
@@ -422,6 +446,186 @@ export async function setAgentStatusAction(formData: FormData) {
       throw error;
     }
     redirectWithParams(`/agents/${key || ""}`, { error: error instanceof Error ? error.message : "Unable to change agent status." });
+  }
+}
+
+export async function confirmAgentProfileAction(formData: FormData) {
+  const key = slugifyKey(text(formData, "key"));
+  const profileStatus = text(formData, "profileStatus");
+  const notes = text(formData, "notes");
+
+  if (isDemoMode()) {
+    redirectWithParams(`/agents/${key}`, { message: `Demo founder profile workflow staged: ${profileStatus}.` });
+  }
+
+  try {
+    if (!key || !["founder_confirmed", "needs_review"].includes(profileStatus)) {
+      throw new Error("A valid profile confirmation decision is required.");
+    }
+
+    const context = await requireAdminContext();
+    const { data: existing, error: existingError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("*")
+      .eq("organisation_id", context.organisationId)
+      .eq("key", key)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (!existing?.id) {
+      throw new Error("Agent profile was not found.");
+    }
+
+    const nextVersion = Number(existing.version ?? 1) + 1;
+    const profile = {
+      ...asRecord(existing.profile),
+      profileStatus,
+      founderConfirmedAt: profileStatus === "founder_confirmed" ? new Date().toISOString() : undefined,
+      founderConfirmedBy: profileStatus === "founder_confirmed" ? context.user.id : undefined,
+      founderConfirmationNotes: notes || undefined,
+    };
+    const { data: updated, error } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .update({ profile, version: nextVersion, updated_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .eq("organisation_id", context.organisationId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const changeSummary = profileStatus === "founder_confirmed" ? "Founder confirmed the agent profile." : "Founder requested profile changes.";
+    await recordAgentVersion(context, updated as Record<string, unknown>, changeSummary);
+    await recordAuditEvent({
+      organisationId: context.organisationId,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: profileStatus === "founder_confirmed" ? "agent.profile_confirmed" : "agent.profile_changes_requested",
+      entityType: "agent",
+      entityId: String(updated.id),
+      summary: changeSummary,
+      details: { key, profileStatus, notes, version: nextVersion, actorRole: context.role },
+    });
+
+    revalidatePath("/agents");
+    redirectWithParams(`/agents/${key}`, { message: `${changeSummary} Version ${nextVersion} recorded.` });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/agents/${key || ""}`, { error: error instanceof Error ? error.message : "Unable to update profile confirmation." });
+  }
+}
+
+export async function rollbackAgentVersionAction(formData: FormData) {
+  const key = slugifyKey(text(formData, "key"));
+  const versionId = text(formData, "versionId");
+
+  if (isDemoMode()) {
+    redirectWithParams(`/agents/${key}`, { message: "Demo rollback staged. No live record was changed." });
+  }
+
+  try {
+    if (!key || !versionId) {
+      throw new Error("Agent and version are required for rollback.");
+    }
+
+    const context = await requireAdminContext();
+    const { data: existing, error: existingError } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("*")
+      .eq("organisation_id", context.organisationId)
+      .eq("key", key)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (!existing?.id) {
+      throw new Error("Agent profile was not found.");
+    }
+
+    const { data: targetVersion, error: versionError } = await context.supabase
+      .schema("staffer")
+      .from("agent_versions")
+      .select("id, agent_id, version, snapshot")
+      .eq("organisation_id", context.organisationId)
+      .eq("id", versionId)
+      .maybeSingle();
+
+    if (versionError) {
+      throw new Error(versionError.message);
+    }
+
+    if (!targetVersion?.id || String(targetVersion.agent_id) !== String(existing.id)) {
+      throw new Error("Version snapshot was not found for this agent.");
+    }
+
+    const snapshot = asRecord(targetVersion.snapshot);
+    const nextVersion = Number(existing.version ?? 1) + 1;
+    const updatePayload = {
+      key: String(snapshot.key ?? existing.key),
+      name: String(snapshot.name ?? existing.name),
+      job_title: String(snapshot.job_title ?? existing.job_title),
+      department: String(snapshot.department ?? existing.department),
+      biography: snapshot.biography ?? existing.biography ?? null,
+      profile: asRecord(snapshot.profile ?? existing.profile),
+      autonomy_level: Number(snapshot.autonomy_level ?? existing.autonomy_level ?? 1),
+      primary_model: snapshot.primary_model ?? existing.primary_model ?? null,
+      fallback_model: snapshot.fallback_model ?? existing.fallback_model ?? null,
+      maximum_steps: Number(snapshot.maximum_steps ?? existing.maximum_steps ?? 8),
+      maximum_cost_usd: snapshot.maximum_cost_usd ?? existing.maximum_cost_usd ?? null,
+      maximum_input_tokens: snapshot.maximum_input_tokens ?? existing.maximum_input_tokens ?? null,
+      maximum_output_tokens: snapshot.maximum_output_tokens ?? existing.maximum_output_tokens ?? null,
+      prohibited_actions: Array.isArray(snapshot.prohibited_actions) ? snapshot.prohibited_actions : existing.prohibited_actions ?? [],
+      approval_rules: Array.isArray(snapshot.approval_rules) ? snapshot.approval_rules : existing.approval_rules ?? [],
+      status: String(snapshot.status ?? existing.status ?? "draft"),
+      version: nextVersion,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: updated, error } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .update(updatePayload)
+      .eq("id", existing.id)
+      .eq("organisation_id", context.organisationId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const rolledBackVersion = Number(targetVersion.version ?? 1);
+    await recordAgentVersion(context, updated as Record<string, unknown>, `Rolled back to version ${rolledBackVersion}.`);
+    await recordAuditEvent({
+      organisationId: context.organisationId,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "agent.version_rolled_back",
+      entityType: "agent",
+      entityId: String(updated.id),
+      summary: `Agent profile was rolled back to version ${rolledBackVersion}.`,
+      details: { key, rolledBackVersion, newVersion: nextVersion, versionId },
+    });
+
+    revalidatePath("/agents");
+    redirectWithParams(`/agents/${String(updated.key ?? key)}`, { message: `Rolled back to version ${rolledBackVersion}. Version ${nextVersion} recorded.` });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/agents/${key || ""}`, { error: error instanceof Error ? error.message : "Unable to roll back agent version." });
   }
 }
 

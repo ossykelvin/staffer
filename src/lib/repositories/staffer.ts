@@ -34,6 +34,10 @@ function asOptionalNumber(value: unknown) {
   return undefined;
 }
 
+function asAvatarMode(value: unknown) {
+  return value === "initials" || value === "generated" || value === "image_path" ? value : undefined;
+}
+
 function asProfile(record: JsonRecord) {
   return (record.profile && typeof record.profile === "object" ? record.profile : {}) as JsonRecord;
 }
@@ -118,7 +122,13 @@ function mapAgent(record: JsonRecord): AgentProfile {
     initials: String(profile.initials ?? String(record.name ?? "A").slice(0, 2).toUpperCase()),
     accent: String(profile.accent ?? "blue"),
     avatarPath: typeof profile.avatarPath === "string" ? profile.avatarPath : undefined,
+    avatarMode: asAvatarMode(profile.avatarMode),
     avatarStyle: typeof profile.avatarStyle === "string" ? profile.avatarStyle : undefined,
+    avatarSeed: typeof profile.avatarSeed === "string" ? profile.avatarSeed : undefined,
+    avatarPrompt: typeof profile.avatarPrompt === "string" ? profile.avatarPrompt : undefined,
+    founderConfirmedAt: typeof profile.founderConfirmedAt === "string" ? profile.founderConfirmedAt : undefined,
+    founderConfirmedBy: typeof profile.founderConfirmedBy === "string" ? profile.founderConfirmedBy : undefined,
+    founderConfirmationNotes: typeof profile.founderConfirmationNotes === "string" ? profile.founderConfirmationNotes : undefined,
     summary: String(record.biography ?? profile.summary ?? "Live agent profile."),
     personality: asStringArray(profile.personality),
     communicationStyle: String(profile.communicationStyle ?? "Configured by organisation"),

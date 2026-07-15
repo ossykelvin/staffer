@@ -16,6 +16,7 @@ const requiredFiles = [
   "src/app/invite/[token]/page.tsx",
   "src/app/agents/actions.ts",
   "src/app/agents/new/page.tsx",
+  "src/components/agent-avatar.tsx",
   "src/components/agent-profile-form.tsx",
   "src/app/settings/actions.ts",
   "src/app/approvals/[id]/actions.ts",
@@ -124,7 +125,7 @@ for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTo
 }
 
 const agentActions = readFileSync("src/app/agents/actions.ts", "utf8");
-for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "createToolAction", "assignAgentToolAction", "removeAgentToolAction", "agent.skill_mapped", "agent.tool_mapped", "maximum_input_tokens", "prohibited_actions", "approval_rules"]) {
+for (const phrase of ["createAgentAction", "updateAgentAction", "setAgentStatusAction", "confirmAgentProfileAction", "rollbackAgentVersionAction", "createSkillAction", "assignAgentSkillAction", "removeAgentSkillAction", "createToolAction", "assignAgentToolAction", "removeAgentToolAction", "agent.skill_mapped", "agent.tool_mapped", "agent.profile_confirmed", "agent.version_rolled_back", "maximum_input_tokens", "prohibited_actions", "approval_rules"]) {
   if (!agentActions.includes(phrase)) {
     throw new Error(`Missing agent registry action phrase: ${phrase}`);
   }

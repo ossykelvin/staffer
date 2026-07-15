@@ -88,9 +88,40 @@ export function AgentProfileForm({ agent, action, submitLabel }: AgentProfileFor
         <Field label="Experience years" name="experienceYears" type="number" min={0} defaultValue={agent?.experienceYears ?? 0} />
         <Field label="Initials" name="initials" defaultValue={agent?.initials} />
         <Field label="Accent" name="accent" defaultValue={agent?.accent ?? "blue"} />
-        <Field label="Avatar path" name="avatarPath" defaultValue={agent?.avatarPath} />
-        <Field label="Avatar style" name="avatarStyle" defaultValue={agent?.avatarStyle} />
       </div>
+
+      <section className="rounded-2xl border border-white/8 bg-black/10 p-5">
+        <h3 className="font-semibold text-slate-200">Avatar</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Choose generated avatars for live-safe profile visuals, or reference a reviewed local image path when one exists in the app.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="block text-sm text-slate-400">
+            Avatar mode
+            <select
+              name="avatarMode"
+              defaultValue={agent?.avatarMode ?? (agent?.avatarPath ? "image_path" : "initials")}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-slate-100 outline-none transition focus:border-blue-400/50"
+            >
+              <option value="initials">Initials</option>
+              <option value="generated">Generated avatar</option>
+              <option value="image_path">Reviewed image path</option>
+            </select>
+          </label>
+          <Field label="Avatar path" name="avatarPath" defaultValue={agent?.avatarPath} />
+          <Field label="Avatar style" name="avatarStyle" defaultValue={agent?.avatarStyle} />
+          <Field label="Generated avatar seed" name="avatarSeed" defaultValue={agent?.avatarSeed} />
+        </div>
+        <div className="mt-4">
+          <TextArea
+            label="Generated avatar prompt"
+            name="avatarPrompt"
+            defaultValue={agent?.avatarPrompt}
+            rows={3}
+            help="Used as governed metadata for generated/avatar direction. It does not call an image provider in this slice."
+          />
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block text-sm text-slate-400">

@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { AgentAvatar } from "@/components/agent-avatar";
 import { StatusBadge } from "@/components/status-badge";
 import type { AgentProfile } from "@/lib/types";
 
@@ -11,21 +11,7 @@ export function AgentCard({ agent }: { agent: AgentProfile }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          {agent.avatarPath ? (
-            <span className="relative size-12 overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-lg shadow-blue-950/40">
-              <Image
-                src={agent.avatarPath}
-                alt={`${agent.name}, ${agent.jobTitle}`}
-                fill
-                sizes="48px"
-                className="object-cover"
-              />
-            </span>
-          ) : (
-            <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-blue-500/90 to-cyan-400/80 font-bold text-white shadow-lg shadow-blue-950/40">
-              {agent.initials}
-            </span>
-          )}
+          <AgentAvatar agent={agent} />
           <div>
             <h3 className="font-semibold text-white group-hover:text-cyan-200">{agent.name}</h3>
             <p className="mt-0.5 text-xs text-slate-500">{agent.jobTitle}</p>

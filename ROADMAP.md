@@ -28,6 +28,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-016: Skills catalogue and mapping — added live skills catalogue reads, skill creation, agent-skill proficiency mapping/removal and tightened cross-tenant junction policies; verified no duplicate permissive Staffer policies for touched tables
 - [x] PB-017: Tools catalogue and agent-tool permission mapping — added live tool catalogue reads, tool creation with risk/approval/schema fields, agent-tool mapping/removal with JSON constraints, version snapshots and stricter same-tenant junction policies
 - [x] PB-018: Configure autonomy defaults, prohibited actions, approval rules and per-agent model/cost/step/token limits — added organisation default guardrail settings, per-agent runtime routing/limits, prohibited actions and approval rules with live migration `phase2_agent_guardrails`
+- [x] PB-019: Agent rollback, generated avatars and founder confirmation — added append-only rollback actions, generated avatar metadata/rendering and explicit founder confirmation/request-changes workflow with audit events
 
 ## Current first-draft scope
 
@@ -68,9 +69,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Configure autonomy levels 0–5 with organisation defaults — editable organisation defaults now live in `organisations.settings` and preserve other settings during updates
 - [x] Configure prohibited actions and approval rules per agent — `agents.prohibited_actions` and `agents.approval_rules` are editable arrays with database JSON-array constraints
 - [x] Add model, step, token and cost limits per agent — agent forms and detail pages now cover model keys plus step, cost, input-token and output-token ceilings
-- [ ] Add agent version history and rollback
-- [ ] Add profile image upload or generated-avatar option
-- [ ] Add founder confirmation workflow for draft personas
+- [x] Add agent version history and rollback — version history now supports rollback from immutable snapshots into a new audited version
+- [x] Add profile image upload or generated-avatar option — added governed generated-avatar metadata/rendering while preserving reviewed local image-path support
+- [x] Add founder confirmation workflow for draft personas — agent detail pages now record founder confirmation or requested changes with notes, version snapshots and audit events
 
 **Acceptance:** An administrator can change an agent's profile or permissions without changing code, and all changes are versioned.
 
