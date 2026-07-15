@@ -1,6 +1,8 @@
-# Staffer — First Draft
+# Staffer
 
-A modern, governed AI staff operations platform for KOP Technology. This package is designed as a working visual scaffold and a precise handoff to Codex.
+All Our Staff.
+
+Staffer is a modern, governed AI staff operations platform for KOP Technology. This package is designed as a working visual scaffold and a precise handoff to Codex.
 
 ## Included
 
