@@ -11,6 +11,7 @@ const requiredFiles = [
   "supabase/migrations/20260715205737_phase8_knowledge_ingestion_retrieval.sql",
   "supabase/migrations/20260715220229_phase9_customer_support_triage.sql",
   "supabase/migrations/20260715221219_phase9_support_triage_indexes.sql",
+  "supabase/migrations/20260715224930_phase9_approved_brevo_execution.sql",
   "src/proxy.ts",
   "src/lib/approvals/policy.ts",
   "src/lib/ai/provider.ts",
@@ -185,6 +186,12 @@ const requiredSupportTriageSql = [
   "support_triage_cases_external_action_status_check",
 ];
 
+const requiredApprovedEmailExecutionSql = [
+  "support_triage_cases_external_action_status_check",
+  "'sent'",
+  "approval-gated Brevo send completion",
+];
+
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
     throw new Error(`Missing required live-foundation file: ${file}`);
@@ -261,6 +268,13 @@ for (const phrase of requiredSupportTriageSql) {
   }
 }
 
+const approvedEmailExecutionSql = readFileSync("supabase/migrations/20260715224930_phase9_approved_brevo_execution.sql", "utf8").toLowerCase();
+for (const phrase of requiredApprovedEmailExecutionSql) {
+  if (!approvedEmailExecutionSql.includes(phrase.toLowerCase())) {
+    throw new Error(`Missing required approved email execution SQL phrase: ${phrase}`);
+  }
+}
+
 const repository = readFileSync("src/lib/repositories/staffer.ts", "utf8");
 for (const exportedName of ["getAgents", "getAgentVersions", "getSkills", "getTools", "getTasks", "getTaskCollaboration", "getKnowledgeHubData", "getSupportTriageData", "getApprovals", "getApprovalDetailById", "getWorkflows", "getWorkflowExecutionDetail", "getDashboardData"]) {
   if (!repository.includes(`export async function ${exportedName}`)) {
@@ -290,7 +304,7 @@ for (const phrase of ["createInvitationAction", "storeIntegrationSecretAction", 
 }
 
 const approvalActions = readFileSync("src/app/approvals/[id]/actions.ts", "utf8");
-for (const phrase of ["stageApprovalDecisionAction", "verifyApprovalExecutionAction", "approval_decisions", "verify_approval_execution", "approval.execution_verified", "approval.execution_blocked"]) {
+for (const phrase of ["stageApprovalDecisionAction", "verifyApprovalExecutionAction", "sendApprovedSupportEmailAction", "approval_decisions", "verify_approval_execution", "sendTransactionalEmail", "approval.execution_verified", "approval.execution_blocked", "support_triage.email_sent"]) {
   if (!approvalActions.includes(phrase)) {
     throw new Error(`Missing approval policy action phrase: ${phrase}`);
   }

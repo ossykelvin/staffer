@@ -14,6 +14,7 @@
     "verify:workflow-execution": "node scripts/verify-workflow-execution.mjs",
     "verify:customer-support-triage": "node scripts/verify-customer-support-triage.mjs",
     "verify:email-delivery": "node scripts/verify-email-delivery.mjs",
+    "verify:approved-email-execution": "node scripts/verify-approved-email-execution.mjs",
     "verify:live-foundation": "node scripts/verify-live-foundation.mjs",
     "check": "npm run lint && npm run typecheck && npm run build"
   },

@@ -5,7 +5,7 @@ import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { approvals } from "@/lib/data";
 import { getApprovalDetailById } from "@/lib/repositories/staffer";
-import { stageApprovalDecisionAction, verifyApprovalExecutionAction } from "@/app/approvals/[id]/actions";
+import { sendApprovedSupportEmailAction, stageApprovalDecisionAction, verifyApprovalExecutionAction } from "@/app/approvals/[id]/actions";
 
 export function generateStaticParams() {
   return approvals.map((approval) => ({ id: approval.id }));
@@ -28,6 +28,8 @@ export default async function ApprovalDetailPage({
   const { approval, policyEvaluation, decisions, executionChecks } = detail;
   const payload = approval.payload ?? {};
   const exactPayload = JSON.stringify(payload, null, 2);
+  const isSupportResponseApproval = approval.type === "support.response_draft" || payload.action === "support.response_draft";
+  const canExecuteSupportEmail = isSupportResponseApproval && approval.status === "approved" && approval.executionStatus !== "executed";
 
   return (
     <>
@@ -128,6 +130,32 @@ export default async function ApprovalDetailPage({
               </button>
             </form>
           </div>
+
+          {isSupportResponseApproval ? (
+            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.06] p-6">
+              <h2 className="font-semibold text-white">Approved Brevo email execution</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                After human approval, Staffer verifies this exact stored payload again, sends Anna&apos;s response through the server-only Brevo provider, and records case, task, workflow and audit evidence.
+              </p>
+              <form action={sendApprovedSupportEmailAction} className="mt-4 space-y-3">
+                <input type="hidden" name="approvalId" value={approval.id} />
+                <button
+                  type="submit"
+                  disabled={!canExecuteSupportEmail}
+                  className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Execute approved Brevo email
+                </button>
+              </form>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                {approval.executionStatus === "executed"
+                  ? "This approval has already executed, so Staffer blocks duplicate sends."
+                  : approval.status === "approved"
+                    ? "Ready: approval is recorded. The server action will still re-check the payload hash before sending."
+                    : "Blocked until the approval status is approved."}
+              </p>
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold text-white">Decision history</h2>
