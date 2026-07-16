@@ -19,6 +19,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { agents } from "@/lib/data";
 import { getAgentById, getAgentVersions, getSkills, getTools } from "@/lib/repositories/staffer";
 
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return agents.map((agent) => ({ id: agent.id }));
 }

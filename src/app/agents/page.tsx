@@ -3,6 +3,8 @@ import { AgentCard } from "@/components/agent-card";
 import { PageHeading } from "@/components/page-heading";
 import { getAgents, getSkills, getTools } from "@/lib/repositories/staffer";
 
+export const dynamic = "force-dynamic";
+
 export default async function AgentsPage() {
   const [agents, skills, tools] = await Promise.all([getAgents(), getSkills(), getTools()]);
 
