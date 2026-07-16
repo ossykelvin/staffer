@@ -3,13 +3,23 @@ import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { replayWorkflowRunAction, startWorkflowRunAction, transitionWorkflowRunAction } from "@/app/workflows/[id]/actions";
+import { startFeatureIntakeAction } from "@/app/workflows/[id]/feature-intake-actions";
 import { startSupportTriageAction } from "@/app/workflows/[id]/support-triage-actions";
 import { workflows } from "@/lib/data";
 import { getWorkflowDryRun } from "@/lib/demo-details";
-import { getSupportTriageData, getWorkflowById, getWorkflowExecutionDetail } from "@/lib/repositories/staffer";
+import { getFeatureIntakeData, getSupportTriageData, getWorkflowById, getWorkflowExecutionDetail } from "@/lib/repositories/staffer";
 
 export function generateStaticParams() {
   return workflows.map((workflow) => ({ id: workflow.id }));
+}
+
+export const dynamic = "force-dynamic";
+
+function summarizeArtifact(value: Record<string, unknown>) {
+  return Object.entries(value)
+    .slice(0, 3)
+    .map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(", ") : typeof item === "object" ? JSON.stringify(item) : String(item)}`)
+    .join(" · ");
 }
 
 export default async function WorkflowDetailPage({
@@ -30,6 +40,7 @@ export default async function WorkflowDetailPage({
   const dryRun = getWorkflowDryRun(workflow);
   const execution = await getWorkflowExecutionDetail(id);
   const supportTriage = id === "support-triage" ? await getSupportTriageData() : null;
+  const featureIntake = id === "feature-intake" ? await getFeatureIntakeData() : null;
   const latestRun = execution.latestRun;
   const latestSteps = latestRun?.steps ?? [];
   const latestEvents = latestRun?.events ?? [];
@@ -200,6 +211,66 @@ export default async function WorkflowDetailPage({
               </form>
             </div>
           ) : null}
+          {featureIntake ? (
+            <div className="rounded-2xl border border-purple-400/15 bg-purple-400/8 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-purple-300">PB-026 live workflow</p>
+                  <h2 className="mt-2 font-semibold text-white">Feature intake to engineering</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                    Capture a feature request and let Staffer draft the product summary, requirements, architecture options, implementation plan, QA plan, compliance review and exact GitHub issue payload. GitHub creation stays blocked until approval.
+                  </p>
+                </div>
+                <StatusBadge value="GitHub approval gated" />
+              </div>
+              <form action={startFeatureIntakeAction} className="mt-6 grid gap-4 lg:grid-cols-2">
+                <input type="hidden" name="workflowKey" value={workflow.id} />
+                <input type="hidden" name="sourceType" value="manual" />
+                <label className="text-sm text-slate-300">
+                  Requester name
+                  <input name="requesterName" placeholder="Founder, customer, team member" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Requester email
+                  <input name="requesterEmail" type="email" placeholder="requester@example.com" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Customer segment
+                  <input name="customerSegment" placeholder="Pilot customer, enterprise, internal ops..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Product area
+                  <input name="productArea" placeholder="Workflow automation, approvals, mobile..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Source reference
+                  <input name="sourceReference" placeholder="Optional idempotency key from form/email later" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Feature title
+                  <input name="title" required placeholder="Add customer portal visibility for approval status" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Product problem
+                  <textarea name="problemStatement" required rows={4} placeholder="What problem does this solve and for whom?" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Expected outcome
+                  <textarea name="expectedOutcome" required rows={3} placeholder="Describe the measurable user/business outcome." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <label className="text-sm text-slate-300 lg:col-span-2">
+                  Evidence
+                  <textarea name="evidence" rows={4} placeholder="Customer quote, support case, metric, founder note, competitor signal..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-slate-100 outline-none focus:border-purple-400" />
+                </label>
+                <div className="lg:col-span-2">
+                  <button className="rounded-xl bg-purple-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-purple-300">
+                    Create governed feature intake
+                  </button>
+                  <p className="mt-2 text-xs text-slate-500">GitHub issue creation is intentionally blocked. This creates a task, workflow run, specialist package and approval request only.</p>
+                </div>
+              </form>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold text-white">Durable step ledger</h2>
             {latestSteps.length ? (
@@ -295,6 +366,60 @@ export default async function WorkflowDetailPage({
                 </div>
               ) : (
                 <p className="mt-4 text-sm leading-6 text-slate-500">No live support triage cases yet. Use the intake form to create the first approval-gated support workflow.</p>
+              )}
+            </div>
+          ) : null}
+          {featureIntake ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-semibold text-white">Recent feature intake packages</h2>
+                <span className="text-xs text-slate-500">{featureIntake.requests.length} shown</span>
+              </div>
+              {featureIntake.requests.length ? (
+                <div className="mt-5 space-y-4">
+                  {featureIntake.requests.map((request) => (
+                    <article key={request.id} className="rounded-xl border border-white/8 bg-black/10 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-medium text-slate-200">{request.title}</h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {request.requesterName ?? "Unknown requester"} {request.productArea ? `· ${request.productArea}` : ""} · {new Date(request.createdAt).toLocaleString("en-GB")}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusBadge value={request.priority} />
+                          <StatusBadge value={request.status} />
+                        </div>
+                      </div>
+                      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">Nancy</dt>
+                          <dd className="mt-1 text-slate-300">{String(request.nancySummary.problem ?? request.problemStatement).slice(0, 90)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">Mobola</dt>
+                          <dd className="mt-1 text-slate-300">{summarizeArtifact(request.mobolaRequirements).slice(0, 120)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-wider text-slate-600">Raj</dt>
+                          <dd className="mt-1 text-slate-300">{summarizeArtifact(request.rajDeliveryPlan).slice(0, 120)}</dd>
+                        </div>
+                      </dl>
+                      <div className="mt-4 rounded-lg border border-white/8 bg-white/[0.03] p-3">
+                        <p className="text-xs uppercase tracking-wider text-slate-600">Approval-gated GitHub issue</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">{String(request.githubIssuePayload.title ?? "Draft GitHub issue payload")}</p>
+                        <p className="mt-1 text-xs text-slate-600">{String(request.githubIssuePayload.repository ?? "Repository configured in settings")}</p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
+                        {request.taskReference ? <Link href={`/tasks/${request.taskReference}`} className="text-blue-300 hover:text-blue-200">Open task</Link> : null}
+                        {request.approvalId ? <Link href={`/approvals/${request.approvalId}`} className="text-cyan-300 hover:text-cyan-200">Review approval</Link> : null}
+                        <span className="text-slate-600">Risk {request.riskClass}/5</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-slate-500">No live feature intake packages yet. Use the intake form to create the first approval-gated engineering request.</p>
               )}
             </div>
           ) : null}

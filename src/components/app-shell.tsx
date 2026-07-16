@@ -9,6 +9,7 @@ const navigation = [
   { href: "/workflows", label: "Workflow Studio", icon: Icons.automation },
   { href: "/approvals", label: "Approval Centre", icon: Icons.approvals },
   { href: "/knowledge", label: "Knowledge Hub", icon: Icons.knowledge },
+  { href: "/governance", label: "Governance", icon: Icons.shield },
   { href: "/integrations", label: "Integrations", icon: Icons.integrations },
   { href: "/settings", label: "Settings", icon: Icons.settings },
 ];

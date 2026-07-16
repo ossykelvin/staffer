@@ -11,6 +11,9 @@ import type {
   ApprovalDetailRecord,
   ApprovalExecutionCheck,
   ApprovalRecord,
+  FeatureIntakeData,
+  FeatureIntakeRequest,
+  GovernanceDashboard,
   KnowledgeCollection,
   KnowledgeDocument,
   KnowledgeHubData,
@@ -369,6 +372,41 @@ function mapSupportTriageCase(record: JsonRecord): SupportTriageCase {
   };
 }
 
+function mapFeatureIntakeRequest(record: JsonRecord): FeatureIntakeRequest {
+  const task = asNestedRecord(record.tasks);
+
+  return {
+    id: String(record.id),
+    taskId: String(record.task_id),
+    taskReference: task ? String(task.reference ?? record.task_id) : undefined,
+    workflowRunId: typeof record.workflow_run_id === "string" ? record.workflow_run_id : null,
+    approvalId: typeof record.approval_id === "string" ? record.approval_id : null,
+    sourceType: String(record.source_type ?? "manual"),
+    sourceReference: typeof record.source_reference === "string" ? record.source_reference : null,
+    requesterName: typeof record.requester_name === "string" ? record.requester_name : null,
+    requesterEmail: typeof record.requester_email === "string" ? record.requester_email : null,
+    customerSegment: typeof record.customer_segment === "string" ? record.customer_segment : null,
+    productArea: typeof record.product_area === "string" ? record.product_area : null,
+    title: String(record.title ?? "Feature request"),
+    problemStatement: String(record.problem_statement ?? ""),
+    expectedOutcome: String(record.expected_outcome ?? ""),
+    evidence: typeof record.evidence === "string" ? record.evidence : null,
+    priority: String(record.priority ?? "medium"),
+    riskClass: Number(record.risk_class ?? 3),
+    targetDecisionAt: typeof record.target_decision_at === "string" ? record.target_decision_at : null,
+    nancySummary: asJsonObject(record.nancy_summary),
+    mobolaRequirements: asJsonObject(record.mobola_requirements),
+    andersonArchitecture: asJsonObject(record.anderson_architecture),
+    rajDeliveryPlan: asJsonObject(record.raj_delivery_plan),
+    nakamuraTestPlan: asJsonObject(record.nakamura_test_plan),
+    lawalComplianceReview: asJsonObject(record.lawal_compliance_review),
+    githubIssuePayload: asJsonObject(record.github_issue_payload),
+    status: String(record.status ?? "approval_requested"),
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+    updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
+  };
+}
+
 function demoSupportTriageData(): SupportTriageData {
   const now = new Date().toISOString();
 
@@ -402,6 +440,79 @@ function demoSupportTriageData(): SupportTriageData {
         updatedAt: now,
       },
     ],
+  };
+}
+
+function demoFeatureIntakeData(): FeatureIntakeData {
+  const now = new Date().toISOString();
+
+  return {
+    requests: [
+      {
+        id: "demo-feature-intake-1",
+        taskId: "demo-feature-task",
+        taskReference: "FEAT-DEMO-001",
+        workflowRunId: "demo-feature-run",
+        approvalId: "APR-221",
+        sourceType: "manual",
+        sourceReference: "demo-founder-request",
+        requesterName: "Founder",
+        requesterEmail: null,
+        customerSegment: "Pilot customer",
+        productArea: "Workflow automation",
+        title: "Add approval-gated feature intake workflow",
+        problemStatement: "Feature requests need a governed path from feedback to engineering work.",
+        expectedOutcome: "A founder can approve a complete engineering issue payload with requirements, architecture, QA and compliance notes.",
+        evidence: "Demo request used for local fallback.",
+        priority: "high",
+        riskClass: 4,
+        targetDecisionAt: now,
+        nancySummary: { problem: "Unstructured feature ideas need product framing.", outcome: "Clear decision-ready intake." },
+        mobolaRequirements: { requirements: ["Capture requester, problem, evidence and outcome", "Generate traceable acceptance criteria"] },
+        andersonArchitecture: { options: ["Use existing workflow engine and approval tables"], risks: ["Do not auto-create GitHub issues before approval"] },
+        rajDeliveryPlan: { slices: ["Schema", "Repository", "Workflow UI", "Approval payload"] },
+        nakamuraTestPlan: { acceptance: ["Payload hash must match approved GitHub issue draft"] },
+        lawalComplianceReview: { controls: ["Avoid personal data in public issue body", "Route regulated claims for review"] },
+        githubIssuePayload: { repository: "ossykelvin/staffer", title: "Draft feature intake issue", labels: ["feature-intake"] },
+        status: "approval_requested",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  };
+}
+
+function demoGovernanceDashboard(): GovernanceDashboard {
+  const completedTasks = demoTasks.filter((task) => task.status.toLowerCase().includes("completed")).length;
+  const blockedTasks = demoTasks.filter((task) => task.status.toLowerCase().includes("blocked")).length;
+  const failedTasks = demoTasks.filter((task) => task.status.toLowerCase().includes("failed")).length;
+
+  return {
+    audit: {
+      events: 12,
+      latestAt: new Date().toISOString(),
+      materialMutations: 7,
+    },
+    cost: {
+      taskRunCostUsd: 0,
+      toolCostUsd: 0,
+    },
+    quality: {
+      completedTasks,
+      failedTasks,
+      blockedTasks,
+      pendingApprovals: demoApprovals.length,
+    },
+    latency: {
+      averageTaskRunMs: null,
+      averageToolMs: null,
+    },
+    failures: {
+      workflowFailures: 0,
+      toolFailures: 0,
+      approvalBlocks: 0,
+    },
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -1083,6 +1194,83 @@ export async function getSupportTriageData(): Promise<SupportTriageData> {
 
   return {
     cases: data.map((record) => mapSupportTriageCase(record as JsonRecord)),
+  };
+}
+
+export async function getFeatureIntakeData(): Promise<FeatureIntakeData> {
+  const context = await getLiveContext();
+
+  if (!context?.organisationId) {
+    return demoFeatureIntakeData();
+  }
+
+  const { data, error } = await context.supabase
+    .schema("staffer")
+    .from("feature_intake_requests")
+    .select(
+      "id, task_id, workflow_run_id, approval_id, source_type, source_reference, requester_name, requester_email, customer_segment, product_area, title, problem_statement, expected_outcome, evidence, priority, risk_class, target_decision_at, nancy_summary, mobola_requirements, anderson_architecture, raj_delivery_plan, nakamura_test_plan, lawal_compliance_review, github_issue_payload, status, created_at, updated_at, tasks(reference)",
+    )
+    .eq("organisation_id", context.organisationId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data) {
+    return demoFeatureIntakeData();
+  }
+
+  return {
+    requests: data.map((record) => mapFeatureIntakeRequest(record as JsonRecord)),
+  };
+}
+
+export async function getGovernanceDashboard(): Promise<GovernanceDashboard> {
+  const context = await getLiveContext();
+
+  if (!context?.organisationId) {
+    return demoGovernanceDashboard();
+  }
+
+  const { data, error } = await context.supabase.schema("staffer").rpc("get_governance_dashboard", {
+    target_organisation_id: context.organisationId,
+  });
+
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    return demoGovernanceDashboard();
+  }
+
+  const raw = data as JsonRecord;
+  const audit = asJsonObject(raw.audit);
+  const cost = asJsonObject(raw.cost);
+  const quality = asJsonObject(raw.quality);
+  const latency = asJsonObject(raw.latency);
+  const failures = asJsonObject(raw.failures);
+
+  return {
+    audit: {
+      events: Number(audit.events ?? 0),
+      latestAt: typeof audit.latestAt === "string" ? audit.latestAt : null,
+      materialMutations: Number(audit.materialMutations ?? 0),
+    },
+    cost: {
+      taskRunCostUsd: Number(cost.taskRunCostUsd ?? 0),
+      toolCostUsd: Number(cost.toolCostUsd ?? 0),
+    },
+    quality: {
+      completedTasks: Number(quality.completedTasks ?? 0),
+      failedTasks: Number(quality.failedTasks ?? 0),
+      blockedTasks: Number(quality.blockedTasks ?? 0),
+      pendingApprovals: Number(quality.pendingApprovals ?? 0),
+    },
+    latency: {
+      averageTaskRunMs: typeof latency.averageTaskRunMs === "number" ? latency.averageTaskRunMs : null,
+      averageToolMs: typeof latency.averageToolMs === "number" ? latency.averageToolMs : null,
+    },
+    failures: {
+      workflowFailures: Number(failures.workflowFailures ?? 0),
+      toolFailures: Number(failures.toolFailures ?? 0),
+      approvalBlocks: Number(failures.approvalBlocks ?? 0),
+    },
+    generatedAt: String(raw.generatedAt ?? new Date().toISOString()),
   };
 }
 

@@ -48,8 +48,8 @@ The current app shows the shape of that product, but most screens are still stat
 - [x] PB-025: Launch the first live workflow: Customer Support Triage. Added tenant-owned support triage settings, live support cases, manual intake, queued task creation, durable workflow start, Anna-style classification, approved knowledge retrieval, citation-backed draft response, specialist routing flags, approval request creation, support triage UI, live RLS/grant checks and static verification.
 - [x] PB-025A: Add approved Brevo execution for support response drafts. Added approval-page execution for Anna support drafts, exact stored-payload verification through `staffer.verify_approval_execution`, server-only Brevo send, duplicate-send blocking, failure state handling, support case/task/workflow/audit evidence updates, and the live `sent` support-case state.
 - [x] PB-025B: Add signup and onboarding welcome email reliability. Added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth/onboarding logs, audited organisation welcome delivery/failure events, dashboard feedback messages, and static verification.
-- [ ] PB-026: Launch the second live workflow: Feature Intake to Engineering.
-- [ ] PB-027: Add governance dashboards for audit, cost, quality, latency, and failures.
+- [x] PB-026: Launch the second live workflow: Feature Intake to Engineering. Added live feature intake settings/requests, manual intake, durable workflow run creation, specialist artifacts from Nancy/Mobola/Anderson/Raj/Nakamura/Lawal, approval-gated GitHub issue payload, task evidence, tool telemetry and live RLS/index checks.
+- [x] PB-027: Add governance dashboards for audit, cost, quality, latency, and failures. Added `/governance`, `staffer.get_governance_dashboard`, tool execution logs and task notification foundations; verified with static checks, typecheck, lint, build and live schema checks.
 
 ## Ready backlog
 

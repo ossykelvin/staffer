@@ -290,6 +290,69 @@ export const supportTriageDataSchema = z.object({
   cases: z.array(supportTriageCaseSchema),
 });
 
+export const featureIntakeRequestSchema = z.object({
+  id: nonEmptyString,
+  taskId: nonEmptyString,
+  taskReference: nonEmptyString.optional(),
+  workflowRunId: nonEmptyString.nullable().optional(),
+  approvalId: nonEmptyString.nullable().optional(),
+  sourceType: nonEmptyString,
+  sourceReference: z.string().trim().nullable().optional(),
+  requesterName: z.string().trim().nullable().optional(),
+  requesterEmail: z.string().trim().nullable().optional(),
+  customerSegment: z.string().trim().nullable().optional(),
+  productArea: z.string().trim().nullable().optional(),
+  title: nonEmptyString,
+  problemStatement: nonEmptyString,
+  expectedOutcome: nonEmptyString,
+  evidence: z.string().trim().nullable().optional(),
+  priority: nonEmptyString,
+  riskClass: z.number().int().min(0).max(5),
+  targetDecisionAt: z.string().trim().nullable().optional(),
+  nancySummary: z.record(z.string(), z.unknown()),
+  mobolaRequirements: z.record(z.string(), z.unknown()),
+  andersonArchitecture: z.record(z.string(), z.unknown()),
+  rajDeliveryPlan: z.record(z.string(), z.unknown()),
+  nakamuraTestPlan: z.record(z.string(), z.unknown()),
+  lawalComplianceReview: z.record(z.string(), z.unknown()),
+  githubIssuePayload: z.record(z.string(), z.unknown()),
+  status: nonEmptyString,
+  createdAt: nonEmptyString,
+  updatedAt: nonEmptyString,
+});
+
+export const featureIntakeDataSchema = z.object({
+  requests: z.array(featureIntakeRequestSchema),
+});
+
+export const governanceDashboardSchema = z.object({
+  audit: z.object({
+    events: z.number().nonnegative(),
+    latestAt: z.string().nullable().optional(),
+    materialMutations: z.number().nonnegative(),
+  }),
+  cost: z.object({
+    taskRunCostUsd: z.number().nonnegative(),
+    toolCostUsd: z.number().nonnegative(),
+  }),
+  quality: z.object({
+    completedTasks: z.number().nonnegative(),
+    failedTasks: z.number().nonnegative(),
+    blockedTasks: z.number().nonnegative(),
+    pendingApprovals: z.number().nonnegative(),
+  }),
+  latency: z.object({
+    averageTaskRunMs: z.number().nullable().optional(),
+    averageToolMs: z.number().nullable().optional(),
+  }),
+  failures: z.object({
+    workflowFailures: z.number().nonnegative(),
+    toolFailures: z.number().nonnegative(),
+    approvalBlocks: z.number().nonnegative(),
+  }),
+  generatedAt: nonEmptyString,
+});
+
 export const approvalRecordSchema = z.object({
   id: nonEmptyString,
   title: nonEmptyString,
@@ -374,6 +437,9 @@ export type KnowledgeSearchResult = z.infer<typeof knowledgeSearchResultSchema>;
 export type KnowledgeHubData = z.infer<typeof knowledgeHubDataSchema>;
 export type SupportTriageCase = z.infer<typeof supportTriageCaseSchema>;
 export type SupportTriageData = z.infer<typeof supportTriageDataSchema>;
+export type FeatureIntakeRequest = z.infer<typeof featureIntakeRequestSchema>;
+export type FeatureIntakeData = z.infer<typeof featureIntakeDataSchema>;
+export type GovernanceDashboard = z.infer<typeof governanceDashboardSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
 export type ApprovalDetailRecord = z.infer<typeof approvalDetailRecordSchema>;

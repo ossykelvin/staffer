@@ -41,6 +41,9 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-025A: Approved Brevo support email execution — added exact-payload verified support response sending from approved Anna drafts, duplicate-send blocking, Brevo failure handling, support case/task/workflow/audit updates and live `sent` state migration
 - [x] PB-025B: Signup and onboarding welcome email reliability — added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth logs, onboarding welcome audit events, dashboard feedback for welcome delivery state and an email-provider env normalization hotfix
 
+- [x] PB-026: Feature Intake to Engineering live workflow - added tenant-owned feature intake settings/requests, manual intake, queued task creation, durable workflow start, Nancy/Mobola/Anderson/Raj/Nakamura/Lawal deterministic artifacts, approval-gated GitHub issue payload, tool execution telemetry and live RLS/index verification
+- [x] PB-027: Governance dashboards - added `/governance` with tenant metrics for audit, cost, quality, latency and failures backed by `staffer.get_governance_dashboard`, plus tool execution logs and task notification foundations
+
 ## Current first-draft scope
 
 - [x] Next.js App Router application shell
@@ -88,15 +91,15 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 3 — Tasks and collaboration
 
-- [ ] Implement task creation, assignment, priority, due date and project linkage
-- [ ] Support human and agent assignees
+- [x] Implement task creation, assignment, priority, due date and project linkage - `/tasks/new` now creates live tenant tasks with project, priority, due date, idempotency key, evidence event, notification queueing and audit log.
+- [x] Support human and agent assignees - live task creation supports self/human assignment and active agent assignment via `assigned_user_id` / `assigned_agent_id`.
 - [x] Add task comments, attachments, dependencies and watchers — comments, watcher controls, dependency edges and attachment-reference evidence events are live-backed through PB-020
-- [ ] Add task states: draft, queued, running, blocked, review, approval, completed, failed, cancelled
+- [x] Add task states: draft, queued, running, blocked, review, approval, completed, failed, cancelled - core enum existed; live creation/status controls and kanban/table rendering now expose all states.
 - [x] Add retry policy and idempotency key — task idempotency keys existed in the core schema; PB-020 added retry policy/count/reason/timestamps and manual retry recording
-- [ ] Add task templates for recurring operations
-- [ ] Add kanban, table and detail views
+- [x] Add task templates for recurring operations - added tenant-owned `staffer.task_templates` plus default feature/documentation templates and RLS policies.
+- [x] Add kanban, table and detail views - task board now includes kanban status columns, table rows and live detail pages.
 - [x] Add activity timeline and evidence panel — task detail pages now combine live evidence events with the existing demo activity timeline
-- [ ] Add notifications for overdue, failed and approval-waiting tasks
+- [x] Add notifications for overdue, failed and approval-waiting tasks - added tenant-owned `staffer.task_notifications` and `staffer.queue_task_notifications` for pending in-app notification records.
 
 **Acceptance:** A task can move from creation to completion with every state transition and actor recorded.
 
@@ -117,7 +120,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 ## Phase 5 — Tool registry
 
-- [ ] Define tool contract: key, description, input schema, output schema, risk class, timeout and required approval
+- [x] Define tool contract: key, description, input schema, output schema, risk class, timeout and required approval - extended tool contracts with timeout, rate-limit, circuit-breaker and redaction policy fields; existing tool catalogue keeps schemas, risk and approval flags.
 - [ ] Implement safe internal tools first: knowledge search, task read/update, approval request, document draft
 - [ ] Implement Gmail read and draft tools; sending remains separately approval-gated
 - [ ] Implement Google Calendar read and draft-event tools
@@ -126,7 +129,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [ ] Implement Supabase report/query tools using allow-listed operations only
 - [ ] Add tool permission checks independent of the language model
 - [ ] Add rate limits and integration-specific circuit breakers
-- [ ] Add redaction of credentials and sensitive customer data from logs
+- [x] Add redaction of credentials and sensitive customer data from logs - added `staffer.tool_execution_logs` with redacted input/output summaries, redaction summary, approval links and metadata-only telemetry.
 
 **Acceptance:** A model cannot call a tool unless both agent permission and workflow policy permit it.
 
@@ -187,15 +190,15 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — PB-025 records task evidence; Kristin documentation follow-up remains open.
 
 ### Feature Intake
-- [ ] Capture feedback from form, email or manual input
-- [ ] Nancy summarises the product problem and expected outcome
-- [ ] Mobola drafts requirements and traceability
-- [ ] Anderson provides architecture, security impact, and delivery options
-- [ ] Raj drafts the implementation plan, delivery slices, dependencies, test approach, and GitHub engineering tasks
-- [ ] Nakamura drafts acceptance, security, and release-risk tests
-- [ ] Lawal identifies applicable data-protection, CQC, financial-services, ISO, audit, and policy-governance controls
-- [ ] Founder approves roadmap or backlog outcome
-- [ ] Create GitHub issue with evidence links
+- [x] Capture feedback from form, email or manual input - manual live intake is implemented with `source_type`/`source_reference` fields ready for email/form/API idempotency.
+- [x] Nancy summarises the product problem and expected outcome - feature intake action stores `nancy_summary`.
+- [x] Mobola drafts requirements and traceability - feature intake action stores requirements, acceptance criteria and traceability in `mobola_requirements`.
+- [x] Anderson provides architecture, security impact, and delivery options - feature intake action stores `anderson_architecture`.
+- [x] Raj drafts the implementation plan, delivery slices, dependencies, test approach, and GitHub engineering tasks - feature intake action stores `raj_delivery_plan` and GitHub task bullets.
+- [x] Nakamura drafts acceptance, security, and release-risk tests - feature intake action stores `nakamura_test_plan`.
+- [x] Lawal identifies applicable data-protection, CQC, financial-services, ISO, audit, and policy-governance controls - feature intake action stores `lawal_compliance_review`.
+- [x] Founder approves roadmap or backlog outcome - feature intake now creates a pending approval with exact payload hash and reviewer count based on risk.
+- [ ] Create GitHub issue with evidence links - Staffer now creates the approval-gated GitHub issue payload and tool telemetry; actual issue creation remains blocked until a governed GitHub execution action is implemented.
 
 ### Documentation Lifecycle
 - [ ] Trigger from an approved feature, process, policy, release, or resolved support case
