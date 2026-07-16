@@ -5,7 +5,12 @@ import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { approvals } from "@/lib/data";
 import { getApprovalDetailById } from "@/lib/repositories/staffer";
-import { sendApprovedSupportEmailAction, stageApprovalDecisionAction, verifyApprovalExecutionAction } from "@/app/approvals/[id]/actions";
+import {
+  createApprovedGitHubIssueAction,
+  sendApprovedSupportEmailAction,
+  stageApprovalDecisionAction,
+  verifyApprovalExecutionAction,
+} from "@/app/approvals/[id]/actions";
 
 export function generateStaticParams() {
   return approvals.map((approval) => ({ id: approval.id }));
@@ -30,6 +35,8 @@ export default async function ApprovalDetailPage({
   const exactPayload = JSON.stringify(payload, null, 2);
   const isSupportResponseApproval = approval.type === "support.response_draft" || payload.action === "support.response_draft";
   const canExecuteSupportEmail = isSupportResponseApproval && approval.status === "approved" && approval.executionStatus !== "executed";
+  const isFeatureIntakeIssueApproval = approval.type === "github.issue_draft" || payload.action === "github.issue_draft";
+  const canCreateGitHubIssue = isFeatureIntakeIssueApproval && approval.status === "approved" && approval.executionStatus !== "executed";
 
   return (
     <>
@@ -152,6 +159,32 @@ export default async function ApprovalDetailPage({
                   ? "This approval has already executed, so Staffer blocks duplicate sends."
                   : approval.status === "approved"
                     ? "Ready: approval is recorded. The server action will still re-check the payload hash before sending."
+                    : "Blocked until the approval status is approved."}
+              </p>
+            </div>
+          ) : null}
+
+          {isFeatureIntakeIssueApproval ? (
+            <div className="rounded-2xl border border-blue-400/15 bg-blue-400/[0.06] p-6">
+              <h2 className="font-semibold text-white">Approved GitHub issue execution</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                After founder approval, Staffer verifies the exact Feature Intake payload again, creates the GitHub issue server-side, and records task, workflow, tool and audit evidence.
+              </p>
+              <form action={createApprovedGitHubIssueAction} className="mt-4 space-y-3">
+                <input type="hidden" name="approvalId" value={approval.id} />
+                <button
+                  type="submit"
+                  disabled={!canCreateGitHubIssue}
+                  className="rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Create approved GitHub issue
+                </button>
+              </form>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                {approval.executionStatus === "executed"
+                  ? "This approval has already executed, so Staffer blocks duplicate issue creation."
+                  : approval.status === "approved"
+                    ? "Ready: approval is recorded. The server action still re-checks the payload hash before GitHub is called."
                     : "Blocked until the approval status is approved."}
               </p>
             </div>

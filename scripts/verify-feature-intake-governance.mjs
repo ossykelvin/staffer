@@ -3,11 +3,15 @@ import { existsSync, readFileSync } from "node:fs";
 const files = [
   "supabase/migrations/20260716003032_phase9_feature_intake_governance.sql",
   "supabase/migrations/20260716004635_phase9_feature_intake_governance_indexes.sql",
+  "supabase/migrations/20260716073234_phase9_github_issue_execution.sql",
   "src/app/workflows/[id]/feature-intake-actions.ts",
   "src/app/workflows/[id]/page.tsx",
   "src/app/governance/page.tsx",
   "src/app/tasks/new/actions.ts",
   "src/app/tasks/new/page.tsx",
+  "src/app/approvals/[id]/actions.ts",
+  "src/app/approvals/[id]/page.tsx",
+  "src/lib/github/issues.ts",
   "src/lib/repositories/staffer.ts",
   "src/lib/schemas.ts",
   "PRODUCT_BACKLOG.md",
@@ -45,6 +49,13 @@ for (const phrase of ["feature_intake_requests_task_idx", "tool_execution_logs_t
   }
 }
 
+const issueExecutionMigration = readFileSync("supabase/migrations/20260716073234_phase9_github_issue_execution.sql", "utf8");
+for (const phrase of ["ossykelvin/staffer-product", "approval_gated_create", "feature_intake_settings.github_policy"]) {
+  if (!issueExecutionMigration.includes(phrase)) {
+    throw new Error(`Missing GitHub issue execution migration phrase: ${phrase}`);
+  }
+}
+
 const featureAction = readFileSync("src/app/workflows/[id]/feature-intake-actions.ts", "utf8");
 for (const phrase of [
   "startFeatureIntakeAction",
@@ -55,9 +66,38 @@ for (const phrase of [
   "tool_execution_logs",
   "github.issue_draft",
   "feature_intake.request_created",
+  "Staffer evidence links",
 ]) {
   if (!featureAction.includes(phrase)) {
     throw new Error(`Missing PB-026 action phrase: ${phrase}`);
+  }
+}
+
+const approvalAction = readFileSync("src/app/approvals/[id]/actions.ts", "utf8");
+for (const phrase of [
+  "createApprovedGitHubIssueAction",
+  "createApprovedGitHubIssue",
+  "verify_approval_execution",
+  "github.issue_create",
+  "feature_intake.github_issue_created",
+  "github_issue_created",
+]) {
+  if (!approvalAction.includes(phrase)) {
+    throw new Error(`Missing approved GitHub issue execution phrase: ${phrase}`);
+  }
+}
+
+const githubIssueProvider = readFileSync("src/lib/github/issues.ts", "utf8");
+for (const phrase of ["GITHUB_API_BASE_URL", "GITHUB_ISSUE_TOKEN", "github.issue_draft", "/issues"]) {
+  if (!githubIssueProvider.includes(phrase)) {
+    throw new Error(`Missing GitHub issue provider phrase: ${phrase}`);
+  }
+}
+
+const approvalPage = readFileSync("src/app/approvals/[id]/page.tsx", "utf8");
+for (const phrase of ["Approved GitHub issue execution", "Create approved GitHub issue", "canCreateGitHubIssue"]) {
+  if (!approvalPage.includes(phrase)) {
+    throw new Error(`Missing approval UI phrase: ${phrase}`);
   }
 }
 

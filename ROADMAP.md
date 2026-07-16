@@ -41,7 +41,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-025A: Approved Brevo support email execution — added exact-payload verified support response sending from approved Anna drafts, duplicate-send blocking, Brevo failure handling, support case/task/workflow/audit updates and live `sent` state migration
 - [x] PB-025B: Signup and onboarding welcome email reliability — added Brevo-backed signup welcome and founder onboarding welcome emails, masked structured auth logs, onboarding welcome audit events, dashboard feedback for welcome delivery state and an email-provider env normalization hotfix
 
-- [x] PB-026: Feature Intake to Engineering live workflow - added tenant-owned feature intake settings/requests, manual intake, queued task creation, durable workflow start, Nancy/Mobola/Anderson/Raj/Nakamura/Lawal deterministic artifacts, approval-gated GitHub issue payload, tool execution telemetry and live RLS/index verification
+- [x] PB-026: Feature Intake to Engineering live workflow - added tenant-owned feature intake settings/requests, manual intake, queued task creation, durable workflow start, Nancy/Mobola/Anderson/Raj/Nakamura/Lawal deterministic artifacts, approval-gated GitHub issue payload with Staffer evidence links, approved GitHub issue execution path, tool execution telemetry and live RLS/index verification; production issue creation requires the product repo and `GITHUB_ISSUE_TOKEN`
 - [x] PB-027: Governance dashboards - added `/governance` with tenant metrics for audit, cost, quality, latency and failures backed by `staffer.get_governance_dashboard`, plus tool execution logs and task notification foundations
 
 ## Current first-draft scope
@@ -198,7 +198,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Nakamura drafts acceptance, security, and release-risk tests - feature intake action stores `nakamura_test_plan`.
 - [x] Lawal identifies applicable data-protection, CQC, financial-services, ISO, audit, and policy-governance controls - feature intake action stores `lawal_compliance_review`.
 - [x] Founder approves roadmap or backlog outcome - feature intake now creates a pending approval with exact payload hash and reviewer count based on risk.
-- [ ] Create GitHub issue with evidence links - Staffer now creates the approval-gated GitHub issue payload and tool telemetry; actual issue creation remains blocked until a governed GitHub execution action is implemented.
+- [ ] Create GitHub issue with evidence links - governed execution action is implemented with exact-payload verification, issue creation telemetry, task/workflow/audit evidence and duplicate execution blocking; production is still blocked until `ossykelvin/staffer-product` exists and `GITHUB_ISSUE_TOKEN` is configured in Vercel.
 
 ### Documentation Lifecycle
 - [ ] Trigger from an approved feature, process, policy, release, or resolved support case

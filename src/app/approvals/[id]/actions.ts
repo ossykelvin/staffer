@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentMembership, getCurrentUser } from "@/lib/auth";
 import { sendTransactionalEmail } from "@/lib/email/provider";
 import { publicEnv } from "@/lib/env";
+import { createApprovedGitHubIssue } from "@/lib/github/issues";
 import { recordAuditEvent } from "@/lib/audit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -74,7 +75,7 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
     const { data: approval, error: readError } = await supabase
       .schema("staffer")
       .from("approvals")
-      .select("id, organisation_id, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count")
+      .select("id, organisation_id, action_key, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count")
       .eq("id", approvalId)
       .eq("organisation_id", membership.organisation_id)
       .maybeSingle();
@@ -136,6 +137,33 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
       };
     }
 
+    if (String(approval.action_key ?? "") === "github.issue_draft") {
+      const featureStatus =
+        finalStatus === "approved"
+          ? "github_issue_ready"
+          : finalStatus === "rejected" || finalStatus === "changes_requested"
+            ? "changes_requested"
+            : null;
+
+      if (featureStatus) {
+        const { error: featureError } = await supabase
+          .schema("staffer")
+          .from("feature_intake_requests")
+          .update({ status: featureStatus, updated_at: new Date().toISOString() })
+          .eq("approval_id", approval.id)
+          .eq("organisation_id", membership.organisation_id);
+
+        if (featureError) {
+          return {
+            mode: "error" as const,
+            eventType: "approval.decision_failed",
+            summary: featureError.message,
+            createdAt: new Date().toISOString(),
+          };
+        }
+      }
+    }
+
     revalidatePath(`/approvals/${approvalId}`);
   }
 
@@ -153,6 +181,272 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
       source: "approval_detail",
     },
   });
+}
+
+export async function createApprovedGitHubIssueAction(formData: FormData) {
+  const approvalId = text(formData, "approvalId");
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Demo mode staged approved GitHub issue creation. No external issue was created." });
+  }
+
+  try {
+    if (!approvalId) {
+      throw new Error("Approval id is required before an approved GitHub issue can be created.");
+    }
+
+    const user = await getCurrentUser();
+    const membership = await getCurrentMembership();
+    const supabase = await getSupabaseServerClient();
+
+    if (!user || !membership?.organisation_id || !supabase) {
+      throw new Error("Approved GitHub issue execution requires an authenticated organisation member.");
+    }
+
+    const { data: approval, error: approvalError } = await supabase
+      .schema("staffer")
+      .from("approvals")
+      .select("id, organisation_id, task_id, workflow_run_id, action_key, action_payload, status, execution_status")
+      .eq("id", approvalId)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+
+    if (approvalError || !approval) {
+      throw new Error(approvalError?.message ?? "Approval was not found.");
+    }
+
+    const actionPayload = asRecord(approval.action_payload);
+    const actionKey = String(approval.action_key ?? actionPayload.action ?? "");
+    if (actionKey !== "github.issue_draft") {
+      throw new Error("Only approved Feature Intake GitHub issue drafts can be executed through this path.");
+    }
+
+    if (approval.status !== "approved") {
+      throw new Error("The GitHub issue payload must be approved before Staffer can create the issue.");
+    }
+
+    if (approval.execution_status === "executed") {
+      throw new Error("This approved GitHub issue payload has already been executed.");
+    }
+
+    const { data: featureRequest, error: featureRequestError } = await supabase
+      .schema("staffer")
+      .from("feature_intake_requests")
+      .select("id, task_id, workflow_run_id, github_issue_payload")
+      .eq("approval_id", approval.id)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+
+    if (featureRequestError || !featureRequest) {
+      throw new Error(featureRequestError?.message ?? "No feature intake request is linked to this approval.");
+    }
+
+    const verification = await supabase.schema("staffer").rpc("verify_approval_execution", {
+      target_approval_id: approval.id,
+      target_execution_payload: actionPayload,
+    });
+
+    if (verification.error) {
+      throw new Error(verification.error.message);
+    }
+
+    const verificationResult = Array.isArray(verification.data) ? verification.data[0] : verification.data;
+    if (!verificationResult?.verified) {
+      throw new Error(String(verificationResult?.failure_reason ?? "Exact approval payload verification failed."));
+    }
+
+    let issueResult: Awaited<ReturnType<typeof createApprovedGitHubIssue>>;
+    try {
+      issueResult = await createApprovedGitHubIssue(actionPayload);
+    } catch (createError) {
+      await Promise.all([
+        supabase
+          .schema("staffer")
+          .from("approvals")
+          .update({ execution_status: "failed" })
+          .eq("id", approval.id)
+          .eq("organisation_id", membership.organisation_id),
+        supabase.schema("staffer").from("tool_execution_logs").insert({
+          organisation_id: membership.organisation_id,
+          task_id: featureRequest.task_id ?? approval.task_id,
+          workflow_run_id: featureRequest.workflow_run_id ?? approval.workflow_run_id,
+          approval_id: approval.id,
+          action_key: "github.issue_create",
+          status: "failed",
+          risk_class: 4,
+          input_summary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
+          output_summary: "GitHub issue creation failed before the provider accepted it.",
+          redaction_summary: "Full issue body is retained only in the approved payload; telemetry stores title, repository and failure reason only.",
+          idempotency_key: `feature-intake:github-create:${featureRequest.id}`,
+          metadata: {
+            repository: payloadString(actionPayload, "repository"),
+            verificationCheckId: verificationResult?.check_id,
+            reason: createError instanceof Error ? createError.message : "Unknown GitHub issue creation failure.",
+          },
+          created_by: user.id,
+        }),
+      ]);
+
+      await recordAuditEvent({
+        organisationId: membership.organisation_id,
+        actorType: "user",
+        actorId: user.id,
+        eventType: "feature_intake.github_issue_failed",
+        entityType: "approval",
+        entityId: approval.id,
+        summary: "Approval-verified GitHub issue creation failed before GitHub accepted it.",
+        details: {
+          approvalId: approval.id,
+          featureRequestId: featureRequest.id,
+          repository: payloadString(actionPayload, "repository"),
+          reason: createError instanceof Error ? createError.message : "Unknown GitHub issue creation failure.",
+          verificationCheckId: verificationResult?.check_id,
+        },
+      });
+
+      throw createError;
+    }
+
+    const now = new Date().toISOString();
+    const taskId = String(featureRequest.task_id ?? approval.task_id ?? "");
+    const workflowRunId = String(featureRequest.workflow_run_id ?? approval.workflow_run_id ?? "");
+    const updatedGithubPayload = {
+      ...actionPayload,
+      createdIssue: {
+        provider: issueResult.provider,
+        mode: issueResult.mode,
+        repository: issueResult.repository,
+        issueNumber: issueResult.issueNumber ?? null,
+        issueUrl: issueResult.issueUrl ?? null,
+        issueId: issueResult.issueId ?? null,
+        createdAt: now,
+      },
+    };
+
+    const writeResults = await Promise.all([
+      supabase
+        .schema("staffer")
+        .from("approvals")
+        .update({ execution_status: "executed" })
+        .eq("id", approval.id)
+        .eq("organisation_id", membership.organisation_id),
+      supabase
+        .schema("staffer")
+        .from("feature_intake_requests")
+        .update({
+          status: "github_issue_created",
+          github_issue_payload: updatedGithubPayload,
+          updated_at: now,
+        })
+        .eq("id", featureRequest.id)
+        .eq("organisation_id", membership.organisation_id),
+      taskId
+        ? supabase
+            .schema("staffer")
+            .from("tasks")
+            .update({ status: "completed", completed_at: now, updated_at: now })
+            .eq("id", taskId)
+            .eq("organisation_id", membership.organisation_id)
+        : Promise.resolve({ error: null }),
+      supabase.schema("staffer").from("tool_execution_logs").insert({
+        organisation_id: membership.organisation_id,
+        task_id: taskId || null,
+        workflow_run_id: workflowRunId || null,
+        approval_id: approval.id,
+        action_key: "github.issue_create",
+        status: "succeeded",
+        risk_class: 4,
+        input_summary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
+        output_summary: issueResult.issueUrl ? `GitHub issue created: ${issueResult.issueUrl}` : "GitHub issue created.",
+        redaction_summary: "Full issue body is retained in approval evidence; execution telemetry stores metadata and the resulting issue URL.",
+        idempotency_key: `feature-intake:github-create:${featureRequest.id}`,
+        metadata: {
+          repository: issueResult.repository,
+          issueNumber: issueResult.issueNumber ?? null,
+          issueUrl: issueResult.issueUrl ?? null,
+          verificationCheckId: verificationResult?.check_id,
+        },
+        created_by: user.id,
+      }),
+      taskId
+        ? supabase.schema("staffer").from("task_evidence_events").insert({
+            organisation_id: membership.organisation_id,
+            task_id: taskId,
+            event_type: "feature_intake.github_issue_created",
+            title: "Approved GitHub issue created",
+            body: issueResult.issueUrl
+              ? `Staffer exact-payload verified the approved Feature Intake issue and created ${issueResult.issueUrl}.`
+              : "Staffer exact-payload verified the approved Feature Intake issue and created the GitHub issue.",
+            metadata: {
+              approvalId: approval.id,
+              featureRequestId: featureRequest.id,
+              repository: issueResult.repository,
+              issueNumber: issueResult.issueNumber ?? null,
+              issueUrl: issueResult.issueUrl ?? null,
+              verificationCheckId: verificationResult?.check_id,
+            },
+            created_by: user.id,
+          })
+        : Promise.resolve({ error: null }),
+      workflowRunId
+        ? supabase.schema("staffer").rpc("record_workflow_run_event", {
+            target_organisation_id: membership.organisation_id,
+            target_workflow_run_id: workflowRunId,
+            target_step_run_id: null,
+            target_event_type: "feature_intake.github_issue_created",
+            target_title: "Approved GitHub issue created",
+            target_body: "GitHub accepted the approval-verified Feature Intake issue payload.",
+            target_metadata: {
+              approvalId: approval.id,
+              featureRequestId: featureRequest.id,
+              repository: issueResult.repository,
+              issueNumber: issueResult.issueNumber ?? null,
+              issueUrl: issueResult.issueUrl ?? null,
+              verificationCheckId: verificationResult?.check_id,
+            },
+          })
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const failedWrite = writeResults.find((result) => result?.error);
+    if (failedWrite?.error) {
+      throw new Error(failedWrite.error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: membership.organisation_id,
+      actorType: "user",
+      actorId: user.id,
+      eventType: "feature_intake.github_issue_created",
+      entityType: "feature_intake_request",
+      entityId: featureRequest.id,
+      summary: "Approved Feature Intake GitHub issue was exact-payload verified and created.",
+      details: {
+        approvalId: approval.id,
+        featureRequestId: featureRequest.id,
+        taskId: taskId || null,
+        workflowRunId: workflowRunId || null,
+        repository: issueResult.repository,
+        issueNumber: issueResult.issueNumber ?? null,
+        issueUrl: issueResult.issueUrl ?? null,
+        verificationCheckId: verificationResult?.check_id,
+      },
+    });
+
+    revalidatePath(`/approvals/${approvalId}`);
+    revalidatePath("/approvals");
+    revalidatePath("/tasks");
+    revalidatePath("/workflows/feature-intake");
+    revalidatePath("/governance");
+    redirectWithParams(`/approvals/${approvalId}`, {
+      message: issueResult.issueUrl ? `Approved GitHub issue created: ${issueResult.issueUrl}` : "Approved GitHub issue created.",
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to create approved GitHub issue." });
+  }
 }
 
 export async function sendApprovedSupportEmailAction(formData: FormData) {

@@ -198,3 +198,13 @@ export type EmailProvider = z.infer<typeof emailProviderSchema>;
 export function getEmailEnv(environment: NodeJS.ProcessEnv = process.env) {
   return emailEnvSchema.parse(environment);
 }
+
+export const githubIssueEnvSchema = z.object({
+  GITHUB_API_BASE_URL: optionalUrl,
+  GITHUB_ISSUE_TOKEN: optionalString,
+  GITHUB_ISSUE_USER_AGENT: optionalString,
+});
+
+export function getGitHubIssueEnv(environment: NodeJS.ProcessEnv = process.env) {
+  return githubIssueEnvSchema.parse(environment);
+}

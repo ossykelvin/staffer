@@ -239,8 +239,11 @@ export async function startFeatureIntakeAction(formData: FormData) {
 
     const settings = asRecord(settingsResult.data);
     const githubPolicy = asRecord(settings.github_policy);
-    const repository = typeof githubPolicy.defaultRepository === "string" ? githubPolicy.defaultRepository : "ossykelvin/staffer";
-    const labels = asStringArray(githubPolicy.labels).length ? asStringArray(githubPolicy.labels) : ["feature-intake", "needs-founder-approval"];
+    const repository = typeof githubPolicy.defaultRepository === "string" ? githubPolicy.defaultRepository : "";
+    const labels = asStringArray(githubPolicy.labels);
+    if (!repository || !labels.length) {
+      throw new Error("Feature Intake GitHub policy must define a default repository and at least one label.");
+    }
     const classification = classifyFeature({ title, problem: problemStatement, outcome: expectedOutcome, evidence, settings });
     const now = new Date();
     const targetDecisionAt = new Date(now.getTime() + classification.targetDays * 24 * 60 * 60 * 1000).toISOString();
@@ -315,8 +318,21 @@ export async function startFeatureIntakeAction(formData: FormData) {
     }
     const workflowRun = Array.isArray(workflowRunResult.data) ? workflowRunResult.data[0] : workflowRunResult.data;
 
+    const appBaseUrl = publicEnv.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
+    const evidenceLinks = [
+      `- Staffer task: ${appBaseUrl ? `${appBaseUrl}/tasks/${task.id}` : `${task.reference} (${task.id})`}`,
+      workflowRun?.run_id ? `- Workflow run: ${appBaseUrl ? `${appBaseUrl}/workflows/${workflowKey}` : workflowRun.run_id}` : "",
+    ].filter(Boolean);
+
     const actionPayload = {
       ...artifacts.githubIssuePayload,
+      body: [
+        artifacts.githubIssuePayload.body,
+        "",
+        "## Staffer evidence links",
+        ...evidenceLinks,
+        "- Approval: pending at payload creation; Staffer records the exact payload hash before execution.",
+      ].join("\n"),
       taskId: task.id,
       taskReference: task.reference,
       workflowRunId: workflowRun?.run_id ?? null,
