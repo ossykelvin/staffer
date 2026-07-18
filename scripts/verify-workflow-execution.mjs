@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 const requiredFiles = [
   "supabase/migrations/20260715203228_phase6_workflow_execution.sql",
+  "supabase/migrations/20260718132847_qualify_workflow_pgcrypto_calls.sql",
   "src/app/workflows/[id]/actions.ts",
   "src/app/workflows/[id]/page.tsx",
   "src/lib/repositories/staffer.ts",
@@ -36,6 +37,23 @@ for (const phrase of [
   if (!migration.includes(phrase)) {
     throw new Error(`Missing workflow execution migration phrase: ${phrase}`);
   }
+}
+
+const pgcryptoFixMigration = readFileSync("supabase/migrations/20260718132847_qualify_workflow_pgcrypto_calls.sql", "utf8");
+for (const phrase of [
+  "extensions.gen_random_bytes(12)",
+  "extensions.gen_random_bytes(16)",
+  "create or replace function staffer.start_workflow_run",
+  "create or replace function staffer.transition_workflow_run",
+  "create or replace function staffer.replay_workflow_run",
+]) {
+  if (!pgcryptoFixMigration.includes(phrase)) {
+    throw new Error(`Missing workflow pgcrypto qualification phrase: ${phrase}`);
+  }
+}
+
+if (/[^.]gen_random_bytes\(/.test(pgcryptoFixMigration)) {
+  throw new Error("Workflow pgcrypto fix migration contains an unqualified gen_random_bytes call.");
 }
 
 const actions = readFileSync("src/app/workflows/[id]/actions.ts", "utf8");

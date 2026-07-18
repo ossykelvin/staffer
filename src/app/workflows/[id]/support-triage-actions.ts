@@ -36,6 +36,12 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
 
+function workflowRunIdFromResult(value: unknown) {
+  const record = asRecord(Array.isArray(value) ? value[0] : value);
+  const id = record.run_id ?? record.workflow_run_id ?? record.id;
+  return typeof id === "string" && id.trim().length > 0 ? id : null;
+}
+
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
@@ -148,12 +154,56 @@ async function liveContext() {
   return { user, membership, supabase };
 }
 
+type LiveContext = Awaited<ReturnType<typeof liveContext>>;
+type CreatedTask = { id: string; reference: string };
+
+async function recordSupportTriageFailure(context: LiveContext, task: CreatedTask, error: unknown) {
+  const message = error instanceof Error ? error.message : "Unknown support triage failure.";
+
+  await Promise.allSettled([
+    context.supabase
+      .schema("staffer")
+      .from("tasks")
+      .update({ status: "failed" })
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("id", task.id),
+    context.supabase.schema("staffer").from("task_evidence_events").insert({
+      organisation_id: context.membership.organisation_id,
+      task_id: task.id,
+      event_type: "system",
+      title: "Support triage workflow failed",
+      body: message,
+      metadata: {
+        workflowEventType: "support_triage.workflow_failed",
+        taskReference: task.reference,
+      },
+      created_by: context.user.id,
+    }),
+    recordAuditEvent({
+      organisationId: context.membership.organisation_id,
+      actorType: "system",
+      actorId: "support-triage",
+      eventType: "support_triage.workflow_failed",
+      entityType: "task",
+      entityId: task.id,
+      summary: "Customer Support Triage failed after task creation.",
+      details: {
+        taskReference: task.reference,
+        error: message,
+      },
+    }),
+  ]);
+}
+
 export async function startSupportTriageAction(formData: FormData) {
   const workflowKey = text(formData, "workflowKey") || "support-triage";
 
   if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
     redirectWithParams(`/workflows/${workflowKey}`, { message: "Demo support triage staged. Live cases are saved when demo mode is disabled." });
   }
+
+  let contextForFailure: LiveContext | null = null;
+  let createdTask: CreatedTask | null = null;
 
   try {
     const subject = text(formData, "subject");
@@ -169,6 +219,7 @@ export async function startSupportTriageAction(formData: FormData) {
     }
 
     const context = await liveContext();
+    contextForFailure = context;
     const settingsResult = await context.supabase.schema("staffer").rpc("ensure_support_triage_settings", {
       target_organisation_id: context.membership.organisation_id,
     });
@@ -235,6 +286,7 @@ export async function startSupportTriageAction(formData: FormData) {
     if (taskError || !task?.id) {
       throw new Error(taskError?.message ?? "Unable to create support task.");
     }
+    createdTask = { id: task.id, reference: task.reference };
 
     const workflowRunResult = await context.supabase.schema("staffer").rpc("start_workflow_run", {
       target_workflow_key: workflowKey,
@@ -246,7 +298,10 @@ export async function startSupportTriageAction(formData: FormData) {
     if (workflowRunResult.error) {
       throw new Error(workflowRunResult.error.message);
     }
-    const workflowRun = Array.isArray(workflowRunResult.data) ? workflowRunResult.data[0] : workflowRunResult.data;
+    const workflowRunId = workflowRunIdFromResult(workflowRunResult.data);
+    if (!workflowRunId) {
+      throw new Error("Workflow run was not created for the support triage task.");
+    }
 
     const knowledgeQuery = buildKnowledgeQuery(subject, messageBody, classification);
     const { data: searchData } = await context.supabase.schema("staffer").rpc("search_knowledge_chunks", {
@@ -271,7 +326,7 @@ export async function startSupportTriageAction(formData: FormData) {
       responseAction,
       taskId: task.id,
       taskReference: task.reference,
-      workflowRunId: workflowRun?.run_id ?? null,
+      workflowRunId,
       recipient: customerEmail || null,
       subject: `Re: ${subject}`,
       draftResponse,
@@ -291,7 +346,7 @@ export async function startSupportTriageAction(formData: FormData) {
       .insert({
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
-        workflow_run_id: workflowRun?.run_id ?? null,
+        workflow_run_id: workflowRunId,
         requested_by_agent_id: typeof annaAgent?.id === "string" ? annaAgent.id : null,
         requested_by_user_id: context.user.id,
         action_key: "support.response_draft",
@@ -320,7 +375,7 @@ export async function startSupportTriageAction(formData: FormData) {
       .insert({
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
-        workflow_run_id: workflowRun?.run_id ?? null,
+        workflow_run_id: workflowRunId,
         approval_id: approval.id,
         source_type: sourceType,
         source_message_id: sourceMessageId || null,
@@ -361,15 +416,15 @@ export async function startSupportTriageAction(formData: FormData) {
       context.supabase.schema("staffer").from("task_evidence_events").insert({
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
-        event_type: "support_triage.case_created",
+        event_type: "system",
         title: "Support triage case created",
         body: `Anna classified this as ${classification.severity} / ${classification.category.replace(/_/g, " ")} and prepared an approval-gated draft response.`,
-        metadata: { supportCaseId: supportCase.id, approvalId: approval.id, citations },
+        metadata: { workflowEventType: "support_triage.case_created", supportCaseId: supportCase.id, approvalId: approval.id, citations },
         created_by: context.user.id,
       }),
       context.supabase.schema("staffer").rpc("record_workflow_run_event", {
         target_organisation_id: context.membership.organisation_id,
-        target_workflow_run_id: workflowRun?.run_id,
+        target_workflow_run_id: workflowRunId,
         target_step_run_id: null,
         target_event_type: "support_triage.draft_approval_requested",
         target_title: "Support draft approval requested",
@@ -387,7 +442,7 @@ export async function startSupportTriageAction(formData: FormData) {
         details: {
           taskId: task.id,
           taskReference: task.reference,
-          workflowRunId: workflowRun?.run_id,
+          workflowRunId,
           approvalId: approval.id,
           classification,
           escalationTargets,
@@ -403,6 +458,9 @@ export async function startSupportTriageAction(formData: FormData) {
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
+    }
+    if (contextForFailure && createdTask) {
+      await recordSupportTriageFailure(contextForFailure, createdTask, error);
     }
     redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to create support triage case." });
   }

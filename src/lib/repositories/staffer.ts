@@ -1287,7 +1287,17 @@ export async function getWorkflows() {
     .eq("organisation_id", context.organisationId)
     .order("name");
 
-  return error || !data || data.length === 0 ? demoWorkflows : data.map((record) => mapWorkflow(record as JsonRecord));
+  if (error || !data || data.length === 0) {
+    return demoWorkflows;
+  }
+
+  const workflowsById = new Map(demoWorkflows.map((workflow) => [workflow.id, workflow]));
+  for (const record of data) {
+    const workflow = mapWorkflow(record as JsonRecord);
+    workflowsById.set(workflow.id, workflow);
+  }
+
+  return Array.from(workflowsById.values()).sort((first, second) => first.name.localeCompare(second.name));
 }
 
 export async function getWorkflowById(id: string) {

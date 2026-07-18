@@ -28,6 +28,12 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
 
+function workflowRunIdFromResult(value: unknown) {
+  const record = asRecord(Array.isArray(value) ? value[0] : value);
+  const id = record.run_id ?? record.workflow_run_id ?? record.id;
+  return typeof id === "string" && id.trim().length > 0 ? id : null;
+}
+
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
@@ -316,12 +322,15 @@ export async function startFeatureIntakeAction(formData: FormData) {
     if (workflowRunResult.error) {
       throw new Error(workflowRunResult.error.message);
     }
-    const workflowRun = Array.isArray(workflowRunResult.data) ? workflowRunResult.data[0] : workflowRunResult.data;
+    const workflowRunId = workflowRunIdFromResult(workflowRunResult.data);
+    if (!workflowRunId) {
+      throw new Error("Workflow run was not created for the feature intake task.");
+    }
 
     const appBaseUrl = publicEnv.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
     const evidenceLinks = [
       `- Staffer task: ${appBaseUrl ? `${appBaseUrl}/tasks/${task.id}` : `${task.reference} (${task.id})`}`,
-      workflowRun?.run_id ? `- Workflow run: ${appBaseUrl ? `${appBaseUrl}/workflows/${workflowKey}` : workflowRun.run_id}` : "",
+      `- Workflow run: ${appBaseUrl ? `${appBaseUrl}/workflows/${workflowKey}` : workflowRunId}`,
     ].filter(Boolean);
 
     const actionPayload = {
@@ -335,7 +344,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
       ].join("\n"),
       taskId: task.id,
       taskReference: task.reference,
-      workflowRunId: workflowRun?.run_id ?? null,
+      workflowRunId,
       featureTitle: title,
       externalCreationBlocked: true,
     };
@@ -352,7 +361,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
       .insert({
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
-        workflow_run_id: workflowRun?.run_id ?? null,
+        workflow_run_id: workflowRunId,
         requested_by_agent_id: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
         requested_by_user_id: context.user.id,
         action_key: "github.issue_draft",
@@ -381,7 +390,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
       .insert({
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
-        workflow_run_id: workflowRun?.run_id ?? null,
+        workflow_run_id: workflowRunId,
         approval_id: approval.id,
         source_type: sourceType,
         source_reference: sourceReference || null,
@@ -412,7 +421,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         organisation_id: context.membership.organisation_id,
         agent_id: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
         task_id: task.id,
-        workflow_run_id: workflowRun?.run_id ?? null,
+        workflow_run_id: workflowRunId,
         approval_id: approval.id,
         action_key: "github.issue_draft",
         status: "approval_required",
@@ -435,7 +444,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
       }),
       context.supabase.schema("staffer").rpc("record_workflow_run_event", {
         target_organisation_id: context.membership.organisation_id,
-        target_workflow_run_id: workflowRun?.run_id,
+        target_workflow_run_id: workflowRunId,
         target_step_run_id: null,
         target_event_type: "feature_intake.approval_requested",
         target_title: "Feature intake approval requested",
@@ -456,7 +465,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         details: {
           taskId: task.id,
           taskReference: task.reference,
-          workflowRunId: workflowRun?.run_id,
+          workflowRunId,
           approvalId: approval.id,
           priority: classification.priority,
           riskClass: classification.riskClass,
