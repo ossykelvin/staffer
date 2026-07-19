@@ -32,7 +32,12 @@ import type {
 
 type JsonRecord = Record<string, unknown>;
 
-const priorityLabels = ["Low", "Medium", "High", "High", "Critical"];
+const priorityLabelsByRank: Record<number, string> = {
+  1: "Low",
+  2: "Medium",
+  3: "High",
+  4: "Critical",
+};
 const riskLabels = ["Low", "Low", "Medium", "High", "Critical", "Critical"];
 
 function isDemoMode() {
@@ -109,6 +114,22 @@ function riskClassFromLabel(value: string) {
     return 2;
   }
   return 1;
+}
+
+function priorityLabel(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return priorityLabelsByRank[value] ?? "Medium";
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return priorityLabelsByRank[parsed] ?? "Medium";
+    }
+    return titleCase(value);
+  }
+
+  return "Medium";
 }
 
 function mapAgentTool(record: JsonRecord): AgentTool | null {
@@ -220,7 +241,7 @@ function mapAgentVersion(record: JsonRecord): AgentVersion {
 }
 
 function mapTask(record: JsonRecord): TaskRecord {
-  const priority = typeof record.priority === "number" ? priorityLabels[record.priority] ?? "Medium" : String(record.priority ?? "Medium");
+  const priority = priorityLabel(record.priority);
 
   return {
     id: String(record.reference ?? record.id),
