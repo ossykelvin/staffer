@@ -63,6 +63,14 @@ for (const phrase of [
   "ensure_feature_intake_workflow",
   "approval_payload_hash",
   "feature_intake_requests",
+  "nancy_summary: artifacts.nancySummary",
+  "mobola_requirements: artifacts.mobolaRequirements",
+  "anderson_architecture: artifacts.andersonArchitecture",
+  "raj_delivery_plan: artifacts.rajDeliveryPlan",
+  "nakamura_test_plan: artifacts.nakamuraTestPlan",
+  "lawal_compliance_review: artifacts.lawalComplianceReview",
+  "github_issue_payload: artifacts.githubIssuePayload",
+  "recordFeatureIntakeFailure",
   "tool_execution_logs",
   "github.issue_draft",
   "feature_intake.request_created",
@@ -71,6 +79,10 @@ for (const phrase of [
   if (!featureAction.includes(phrase)) {
     throw new Error(`Missing PB-026 action phrase: ${phrase}`);
   }
+}
+
+if (featureAction.includes("...artifacts,")) {
+  throw new Error("Feature Intake action must map artifact objects to snake_case Supabase columns instead of spreading camelCase keys.");
 }
 
 const approvalAction = readFileSync("src/app/approvals/[id]/actions.ts", "utf8");

@@ -201,12 +201,69 @@ async function liveContext() {
   return { user, membership, supabase };
 }
 
+type LiveContext = Awaited<ReturnType<typeof liveContext>>;
+type CreatedTask = { id: string; reference: string; workflowRunId: string | null };
+
+async function recordFeatureIntakeFailure(context: LiveContext, task: CreatedTask, error: unknown) {
+  const message = error instanceof Error ? error.message : "Unknown feature intake failure.";
+
+  await Promise.allSettled([
+    context.supabase
+      .schema("staffer")
+      .from("tasks")
+      .update({ status: "failed" })
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("id", task.id),
+    context.supabase.schema("staffer").from("task_evidence_events").insert({
+      organisation_id: context.membership.organisation_id,
+      task_id: task.id,
+      event_type: "system",
+      title: "Feature intake workflow failed",
+      body: message,
+      metadata: {
+        workflowEventType: "feature_intake.workflow_failed",
+        taskReference: task.reference,
+        workflowRunId: task.workflowRunId,
+      },
+      created_by: context.user.id,
+    }),
+    task.workflowRunId
+      ? context.supabase.schema("staffer").rpc("record_workflow_run_event", {
+          target_organisation_id: context.membership.organisation_id,
+          target_workflow_run_id: task.workflowRunId,
+          target_step_run_id: null,
+          target_event_type: "feature_intake.workflow_failed",
+          target_title: "Feature intake workflow failed",
+          target_body: message,
+          target_metadata: { taskId: task.id, taskReference: task.reference },
+        })
+      : Promise.resolve(),
+    recordAuditEvent({
+      organisationId: context.membership.organisation_id,
+      actorType: "system",
+      actorId: "feature-intake",
+      eventType: "feature_intake.workflow_failed",
+      entityType: "task",
+      entityId: task.id,
+      summary: "Feature Intake failed after task creation.",
+      details: {
+        taskReference: task.reference,
+        workflowRunId: task.workflowRunId,
+        error: message,
+      },
+    }),
+  ]);
+}
+
 export async function startFeatureIntakeAction(formData: FormData) {
   const workflowKey = text(formData, "workflowKey") || "feature-intake";
 
   if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
     redirectWithParams(`/workflows/${workflowKey}`, { message: "Demo feature intake staged. Live requests are saved when demo mode is disabled." });
   }
+
+  let contextForFailure: LiveContext | null = null;
+  let createdTask: CreatedTask | null = null;
 
   try {
     const title = text(formData, "title");
@@ -225,6 +282,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
     }
 
     const context = await liveContext();
+    contextForFailure = context;
     const settingsResult = await context.supabase.schema("staffer").rpc("ensure_feature_intake_settings", {
       target_organisation_id: context.membership.organisation_id,
     });
@@ -311,6 +369,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
     if (taskError || !task?.id) {
       throw new Error(taskError?.message ?? "Unable to create feature intake task.");
     }
+    createdTask = { id: task.id, reference: task.reference, workflowRunId: null };
 
     const workflowRunResult = await context.supabase.schema("staffer").rpc("start_workflow_run", {
       target_workflow_key: workflowKey,
@@ -326,6 +385,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
     if (!workflowRunId) {
       throw new Error("Workflow run was not created for the feature intake task.");
     }
+    createdTask = { ...createdTask, workflowRunId };
 
     const appBaseUrl = publicEnv.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
     const evidenceLinks = [
@@ -405,7 +465,13 @@ export async function startFeatureIntakeAction(formData: FormData) {
         priority: classification.priority,
         risk_class: classification.riskClass,
         target_decision_at: targetDecisionAt,
-        ...artifacts,
+        nancy_summary: artifacts.nancySummary,
+        mobola_requirements: artifacts.mobolaRequirements,
+        anderson_architecture: artifacts.andersonArchitecture,
+        raj_delivery_plan: artifacts.rajDeliveryPlan,
+        nakamura_test_plan: artifacts.nakamuraTestPlan,
+        lawal_compliance_review: artifacts.lawalComplianceReview,
+        github_issue_payload: artifacts.githubIssuePayload,
         status: "approval_requested",
         created_by: context.user.id,
       })
@@ -482,6 +548,9 @@ export async function startFeatureIntakeAction(formData: FormData) {
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
+    }
+    if (contextForFailure && createdTask) {
+      await recordFeatureIntakeFailure(contextForFailure, createdTask, error);
     }
     redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to create feature intake request." });
   }
