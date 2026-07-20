@@ -6,6 +6,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { getCurrentMembership, getCurrentUser } from "@/lib/auth";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { assertAgentToolPermission } from "@/lib/tools/permissions";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -408,6 +409,27 @@ export async function startFeatureIntakeAction(formData: FormData) {
       featureTitle: title,
       externalCreationBlocked: true,
     };
+    const githubDraftPermission = await assertAgentToolPermission({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
+      toolKey: "github_issue_draft",
+      actionKey: "github.issue_draft",
+      actorUserId: context.user.id,
+      taskId: task.id,
+      workflowRunId,
+      approvalMode: "approval_request",
+      workflowAllowedActions: ["github.issue_draft"],
+      workflowRequiresApproval: true,
+      inputSummary: title.slice(0, 240),
+      riskClass: classification.riskClass,
+      metadata: {
+        workflowKey,
+        source: "feature_intake",
+        repository,
+      },
+    });
+
     const hashResult = await context.supabase.schema("staffer").rpc("approval_payload_hash", {
       target_payload: actionPayload,
     });
@@ -485,6 +507,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
     await Promise.all([
       context.supabase.schema("staffer").from("tool_execution_logs").insert({
         organisation_id: context.membership.organisation_id,
+        tool_id: githubDraftPermission.toolId,
         agent_id: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
         task_id: task.id,
         workflow_run_id: workflowRunId,

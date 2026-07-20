@@ -1,6 +1,7 @@
 import { agents as demoAgents, approvals as demoApprovals, tasks as demoTasks, workflows as demoWorkflows } from "@/lib/data";
 import { evaluateApprovalPolicy } from "@/lib/approvals/policy";
 import { publicEnv } from "@/lib/env";
+import { createKnowledgeEmbedding } from "@/lib/knowledge/processing";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   AgentProfile,
@@ -31,6 +32,13 @@ import type {
 } from "@/lib/types";
 
 type JsonRecord = Record<string, unknown>;
+type KnowledgeHubFilters = {
+  query?: string;
+  memoryScope?: string;
+  sensitivity?: string;
+  projectKey?: string;
+  customerKey?: string;
+};
 
 const priorityLabelsByRank: Record<number, string> = {
   1: "Low",
@@ -65,6 +73,22 @@ function asOptionalNumber(value: unknown) {
   }
 
   return undefined;
+}
+
+function trimFilter(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function knowledgeFiltersFromInput(input: string | KnowledgeHubFilters = ""): Required<KnowledgeHubFilters> {
+  const filters = typeof input === "string" ? { query: input } : input;
+
+  return {
+    query: trimFilter(filters.query),
+    memoryScope: trimFilter(filters.memoryScope),
+    sensitivity: trimFilter(filters.sensitivity),
+    projectKey: trimFilter(filters.projectKey),
+    customerKey: trimFilter(filters.customerKey),
+  };
 }
 
 function asAvatarMode(value: unknown) {
@@ -315,6 +339,9 @@ function mapKnowledgeCollection(record: JsonRecord, counts: { documentCount?: nu
     description: typeof record.description === "string" ? record.description : null,
     sensitivity: String(record.sensitivity ?? "internal"),
     accessMode: String(record.access_mode ?? "organisation"),
+    memoryScope: String(record.memory_scope ?? "company"),
+    projectKey: typeof record.project_key === "string" ? record.project_key : null,
+    customerKey: typeof record.customer_key === "string" ? record.customer_key : null,
     documentCount: counts.documentCount ?? 0,
     chunkCount: counts.chunkCount ?? 0,
     retrievalCount: counts.retrievalCount,
@@ -333,15 +360,27 @@ function mapKnowledgeDocument(record: JsonRecord): KnowledgeDocument {
     collectionId: typeof record.collection_id === "string" ? record.collection_id : null,
     collectionName: collection ? String(collection.name ?? collection.key ?? "Collection") : null,
     sourceUrl: typeof record.source_url === "string" ? record.source_url : null,
+    storagePath: typeof record.storage_path === "string" ? record.storage_path : null,
+    originalFilename: typeof record.original_filename === "string" ? record.original_filename : null,
+    fileSizeBytes: typeof record.file_size_bytes === "number" ? record.file_size_bytes : null,
+    uploadStatus: String(record.upload_status ?? "not_required"),
     sensitivity: String(record.sensitivity ?? "internal"),
+    memoryScope: String(record.memory_scope ?? "company"),
+    projectKey: typeof record.project_key === "string" ? record.project_key : null,
+    customerKey: typeof record.customer_key === "string" ? record.customer_key : null,
     status: String(record.status ?? "draft"),
     version: Number(record.version ?? 1),
     scanStatus: String(record.scan_status ?? "pending"),
+    scanSummary: typeof record.scan_summary === "string" ? record.scan_summary : null,
     extractionStatus: String(record.extraction_status ?? "pending"),
     embeddingStatus: String(record.embedding_status ?? "not_requested"),
     reviewDueAt: typeof record.review_due_at === "string" ? record.review_due_at : null,
     retentionUntil: typeof record.retention_until === "string" ? record.retention_until : null,
     legalHold: Boolean(record.legal_hold),
+    promotionApprovalId: typeof record.promotion_approval_id === "string" ? record.promotion_approval_id : null,
+    deletionApprovalId: typeof record.deletion_approval_id === "string" ? record.deletion_approval_id : null,
+    deletionRequestedAt: typeof record.deletion_requested_at === "string" ? record.deletion_requested_at : null,
+    deletedAt: typeof record.deleted_at === "string" ? record.deleted_at : null,
     updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
   };
 }
@@ -358,6 +397,11 @@ function mapKnowledgeSearchResult(record: JsonRecord): KnowledgeSearchResult {
     excerpt: String(record.excerpt ?? ""),
     citation: asJsonObject(record.citation),
     rank: Number(record.rank ?? 0),
+    semanticSimilarity: typeof record.semantic_similarity === "number" ? record.semantic_similarity : null,
+    sensitivity: String(record.sensitivity ?? "internal"),
+    memoryScope: String(record.memory_scope ?? "company"),
+    projectKey: typeof record.project_key === "string" ? record.project_key : null,
+    customerKey: typeof record.customer_key === "string" ? record.customer_key : null,
   };
 }
 
@@ -537,12 +581,13 @@ function demoGovernanceDashboard(): GovernanceDashboard {
   };
 }
 
-function demoKnowledgeHubData(query = ""): KnowledgeHubData {
+function demoKnowledgeHubData(input: string | KnowledgeHubFilters = ""): KnowledgeHubData {
+  const filters = knowledgeFiltersFromInput(input);
   const collections = [
-    { key: "company-policies", name: "Company policies", documentCount: 3, chunkCount: 9, sensitivity: "internal", accessMode: "organisation" },
-    { key: "product-documentation", name: "Product documentation", documentCount: 4, chunkCount: 16, sensitivity: "internal", accessMode: "organisation" },
-    { key: "customer-support", name: "Customer support knowledge", documentCount: 5, chunkCount: 21, sensitivity: "restricted", accessMode: "restricted" },
-    { key: "architecture-decisions", name: "Architecture decisions", documentCount: 2, chunkCount: 7, sensitivity: "confidential", accessMode: "restricted" },
+    { key: "company-policies", name: "Company policies", documentCount: 3, chunkCount: 9, sensitivity: "internal", accessMode: "organisation", memoryScope: "company" },
+    { key: "product-documentation", name: "Product documentation", documentCount: 4, chunkCount: 16, sensitivity: "internal", accessMode: "organisation", memoryScope: "project" },
+    { key: "customer-support", name: "Customer support knowledge", documentCount: 5, chunkCount: 21, sensitivity: "restricted", accessMode: "restricted", memoryScope: "customer" },
+    { key: "architecture-decisions", name: "Architecture decisions", documentCount: 2, chunkCount: 7, sensitivity: "confidential", accessMode: "restricted", memoryScope: "project" },
   ].map((collection, index) =>
     mapKnowledgeCollection(
       {
@@ -551,6 +596,7 @@ function demoKnowledgeHubData(query = ""): KnowledgeHubData {
         name: collection.name,
         sensitivity: collection.sensitivity,
         access_mode: collection.accessMode,
+        memory_scope: collection.memoryScope,
         retention_days: 365,
         review_interval_days: 90,
       },
@@ -564,23 +610,36 @@ function demoKnowledgeHubData(query = ""): KnowledgeHubData {
     collectionId: collection.id,
     collectionName: collection.name,
     sourceUrl: null,
+    storagePath: null,
+    originalFilename: null,
+    fileSizeBytes: null,
+    uploadStatus: "not_required",
     sensitivity: collection.sensitivity,
+    memoryScope: collection.memoryScope ?? "company",
+    projectKey: index === 1 ? "product" : null,
+    customerKey: index === 2 ? "demo-customer" : null,
     status: index === 2 ? "needs_review" : "approved",
     version: 1,
     scanStatus: "not_required",
+    scanSummary: "Demo source.",
     extractionStatus: "completed",
-    embeddingStatus: "not_requested",
+    embeddingStatus: "completed",
     reviewDueAt: now,
     retentionUntil: null,
     legalHold: false,
+    promotionApprovalId: null,
+    deletionApprovalId: null,
+    deletionRequestedAt: null,
+    deletedAt: null,
     updatedAt: now,
   }));
 
   return {
     collections,
     documents,
-    query,
-    searchResults: query
+    query: filters.query,
+    filters,
+    searchResults: filters.query
       ? [
           {
             chunkId: "demo-chunk-1",
@@ -590,9 +649,14 @@ function demoKnowledgeHubData(query = ""): KnowledgeHubData {
             collectionName: "Company policies",
             documentTitle: "Company policies starter source",
             chunkIndex: 1,
-            excerpt: `Demo citation-aware result for "${query}". Live search uses approved chunks and records retrieval evidence.`,
+            excerpt: `Demo citation-aware result for "${filters.query}". Live search uses approved chunks, memory filters, embeddings and retrieval evidence.`,
             citation: { documentTitle: "Company policies starter source", chunkIndex: 1, mode: "demo" },
             rank: 1,
+            semanticSimilarity: 0.74,
+            sensitivity: "internal",
+            memoryScope: "company",
+            projectKey: null,
+            customerKey: null,
           },
         ]
       : [],
@@ -1103,26 +1167,29 @@ export async function getTaskCollaboration(taskReference: string): Promise<TaskC
   };
 }
 
-export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData> {
+export async function getKnowledgeHubData(input: string | KnowledgeHubFilters = ""): Promise<KnowledgeHubData> {
   const context = await getLiveContext();
-  const trimmedQuery = query.trim();
+  const filters = knowledgeFiltersFromInput(input);
+  const trimmedQuery = filters.query;
 
   if (!context?.organisationId) {
-    return demoKnowledgeHubData(trimmedQuery);
+    return demoKnowledgeHubData(filters);
   }
 
   const [collectionsResult, documentsResult, chunksResult, retrievalsResult] = await Promise.all([
     context.supabase
       .schema("staffer")
       .from("knowledge_collections")
-      .select("id, key, name, description, sensitivity, access_mode, retention_days, review_interval_days")
+      .select("id, key, name, description, sensitivity, access_mode, memory_scope, project_key, customer_key, retention_days, review_interval_days")
       .eq("organisation_id", context.organisationId)
       .eq("is_active", true)
       .order("name"),
     context.supabase
       .schema("staffer")
       .from("documents")
-      .select("id, title, collection_id, source_url, sensitivity, status, version, scan_status, extraction_status, embedding_status, review_due_at, retention_until, legal_hold, updated_at, created_at, knowledge_collections(name, key)")
+      .select(
+        "id, title, collection_id, source_url, storage_path, original_filename, file_size_bytes, upload_status, sensitivity, memory_scope, project_key, customer_key, status, version, scan_status, scan_summary, extraction_status, embedding_status, review_due_at, retention_until, legal_hold, promotion_approval_id, deletion_approval_id, deletion_requested_at, deleted_at, updated_at, created_at, knowledge_collections(name, key)",
+      )
       .eq("organisation_id", context.organisationId)
       .order("updated_at", { ascending: false })
       .limit(12),
@@ -1140,7 +1207,7 @@ export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData>
   ]);
 
   if (collectionsResult.error || documentsResult.error) {
-    return demoKnowledgeHubData(trimmedQuery);
+    return demoKnowledgeHubData(filters);
   }
 
   const documents = (documentsResult.data ?? []).map((record) => mapKnowledgeDocument(record as JsonRecord));
@@ -1180,6 +1247,12 @@ export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData>
       target_agent_id: null,
       target_collection_keys: null,
       target_limit: 6,
+      target_memory_scopes: filters.memoryScope ? [filters.memoryScope] : null,
+      target_project_key: filters.projectKey || null,
+      target_customer_key: filters.customerKey || null,
+      target_sensitivity: filters.sensitivity ? [filters.sensitivity] : null,
+      target_include_expired: false,
+      target_query_embedding: createKnowledgeEmbedding(trimmedQuery),
     });
     searchResults = ((data ?? []) as JsonRecord[]).map((record) => mapKnowledgeSearchResult(record));
   }
@@ -1189,6 +1262,7 @@ export async function getKnowledgeHubData(query = ""): Promise<KnowledgeHubData>
     documents,
     searchResults,
     query: trimmedQuery,
+    filters,
   };
 }
 

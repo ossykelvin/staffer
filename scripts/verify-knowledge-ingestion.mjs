@@ -47,7 +47,7 @@ for (const phrase of [
   "knowledge_collection_agents",
   "knowledge.document_ingested",
   "contentHash",
-  "chunkText",
+  "chunkKnowledgeText",
 ]) {
   if (!actions.includes(phrase)) {
     throw new Error(`Missing knowledge action phrase: ${phrase}`);
@@ -62,7 +62,7 @@ for (const phrase of ["getKnowledgeHubData", "mapKnowledgeCollection", "mapKnowl
 }
 
 const page = readFileSync("src/app/knowledge/page.tsx", "utf8");
-for (const phrase of ["Ingest approved source text", "Citation-aware search", "Recent source documents", "Ingest, version and chunk"]) {
+for (const phrase of ["Upload or ingest approved knowledge", "Citation-aware filtered search", "Recent source documents", "Upload, scan, version and chunk"]) {
   if (!page.includes(phrase)) {
     throw new Error(`Missing knowledge UI phrase: ${phrase}`);
   }

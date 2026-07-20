@@ -6,6 +6,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { getCurrentMembership, getCurrentUser } from "@/lib/auth";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { assertAgentToolPermission } from "@/lib/tools/permissions";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -304,6 +305,25 @@ export async function startSupportTriageAction(formData: FormData) {
     }
 
     const knowledgeQuery = buildKnowledgeQuery(subject, messageBody, classification);
+    await assertAgentToolPermission({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof annaAgent?.id === "string" ? annaAgent.id : null,
+      toolKey: "knowledge_search",
+      actionKey: "knowledge.search",
+      actorUserId: context.user.id,
+      taskId: task.id,
+      workflowRunId,
+      approvalMode: "none",
+      workflowAllowedActions: ["knowledge.search"],
+      inputSummary: knowledgeQuery.slice(0, 240),
+      riskClass: classification.riskClass,
+      metadata: {
+        workflowKey,
+        source: "support_triage",
+      },
+    });
+
     const { data: searchData } = await context.supabase.schema("staffer").rpc("search_knowledge_chunks", {
       target_query: knowledgeQuery,
       target_agent_id: typeof annaAgent?.id === "string" ? annaAgent.id : null,
@@ -333,6 +353,27 @@ export async function startSupportTriageAction(formData: FormData) {
       citations,
       externalSendBlocked: true,
     };
+    await assertAgentToolPermission({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof annaAgent?.id === "string" ? annaAgent.id : null,
+      toolKey: "email_draft",
+      actionKey: "support.response_draft",
+      actorUserId: context.user.id,
+      taskId: task.id,
+      workflowRunId,
+      approvalMode: "approval_request",
+      workflowAllowedActions: ["support.response_draft"],
+      workflowRequiresApproval: true,
+      inputSummary: subject.slice(0, 240),
+      riskClass: classification.riskClass,
+      metadata: {
+        workflowKey,
+        source: "support_triage",
+        responseAction,
+      },
+    });
+
     const hashResult = await context.supabase.schema("staffer").rpc("approval_payload_hash", {
       target_payload: actionPayload,
     });

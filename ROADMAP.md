@@ -43,6 +43,15 @@ The full roadmap below remains the source of truth for product phases. The immed
 
 - [x] PB-026: Feature Intake to Engineering live workflow - added tenant-owned feature intake settings/requests, manual intake, queued task creation, durable workflow start, Nancy/Mobola/Anderson/Raj/Nakamura/Lawal deterministic artifacts, approval-gated GitHub issue payload with Staffer evidence links, approved GitHub issue execution path, tool execution telemetry, Feature Intake failure compensation to prevent phantom approval tasks after downstream write failures, and live RLS/index verification; production issue creation requires the product repo and `GITHUB_ISSUE_TOKEN`
 - [x] PB-027: Governance dashboards - added `/governance` with tenant metrics for audit, cost, quality, latency and failures backed by `staffer.get_governance_dashboard`, plus tool execution logs and task notification foundations
+- [x] PB-028: Safe internal tool permission enforcement - added server-only permission checks against the tenant tool catalogue and agent-tool mappings before internal tool use, with blocked-attempt telemetry/audit events, workflow allow-list checks and approval-context enforcement for protected GitHub/support-email execution
+- [ ] PB-029: Tool rate limits and circuit breakers - implement server-enforced per-tool/per-integration throttles, breaker states, retry windows and telemetry on top of PB-028 permissions
+- [ ] PB-030: Safe internal tool implementations - build first-class governed tools for knowledge search, task read/update, approval request and document draft
+- [ ] PB-031: Gmail read/draft integration - add Support Triage Gmail ingestion and Gmail draft creation while keeping sending approval-gated
+- [ ] PB-032: Approval centre completion - add sequential approvals, delegation, expiry, separation-of-duties, reviewer comments/history and mobile-friendly notifications
+- [x] PB-033: Knowledge upload and memory controls - added Supabase Storage uploads, built-in file safety scanning, version metadata, text extraction, deterministic embeddings, hybrid retrieval filters, memory-scope separation, approval-gated memory promotion, retention deletion approval with soft retirement, legal-hold controls and PB-033 static verification
+- [ ] PB-034: Complete Customer Support Triage specialist loop - add Nakamura technical review, Lawal compliance review and Kristin knowledge-base follow-up
+- [ ] PB-035: Complete Feature Intake production issue creation readiness - verify GitHub repo/token state and close production issue creation with evidence links
+- [ ] PB-036+: Remaining workflow lifecycles - break Documentation, Growth, Compliance, Daily Brief, Development Delivery and Release Readiness into implementation-sized backlog items
 
 ## Current first-draft scope
 
@@ -121,14 +130,14 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 5 — Tool registry
 
 - [x] Define tool contract: key, description, input schema, output schema, risk class, timeout and required approval - extended tool contracts with timeout, rate-limit, circuit-breaker and redaction policy fields; existing tool catalogue keeps schemas, risk and approval flags.
-- [ ] Implement safe internal tools first: knowledge search, task read/update, approval request, document draft
-- [ ] Implement Gmail read and draft tools; sending remains separately approval-gated
+- [ ] Implement safe internal tools first: knowledge search, task read/update, approval request, document draft — tracked as PB-030.
+- [ ] Implement Gmail read and draft tools; sending remains separately approval-gated — tracked as PB-031.
 - [ ] Implement Google Calendar read and draft-event tools
 - [ ] Implement GitHub read, issue-draft and PR-review-draft tools
 - [ ] Implement Vercel deployment status and log-read tools
 - [ ] Implement Supabase report/query tools using allow-listed operations only
-- [ ] Add tool permission checks independent of the language model
-- [ ] Add rate limits and integration-specific circuit breakers
+- [x] Add tool permission checks independent of the language model — PB-028 enforces agent-tool permissions through a server-only guard before knowledge search, support response draft/send, Feature Intake GitHub issue draft and approved GitHub issue creation; blocked attempts are written to `staffer.tool_execution_logs` and the audit trail.
+- [ ] Add rate limits and integration-specific circuit breakers — tracked as PB-029.
 - [x] Add redaction of credentials and sensitive customer data from logs - added `staffer.tool_execution_logs` with redacted input/output summaries, redaction summary, approval links and metadata-only telemetry.
 
 **Acceptance:** A model cannot call a tool unless both agent permission and workflow policy permit it.
@@ -151,26 +160,26 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 7 — Approval centre
 
 - [x] Implement policy-driven approval creation — PB-021 added tenant-owned approval policies, policy snapshots and required reviewer counts for approval requests
-- [ ] Support one-person, multi-person and sequential approvals
+- [ ] Support one-person, multi-person and sequential approvals — tracked as PB-032.
 - [x] Store evidence, proposed action and exact payload to be executed — approval detail pages now show the exact approved payload and canonical payload hash
-- [ ] Add approve, reject, request changes, delegate and expire actions
+- [ ] Add approve, reject, request changes, delegate and expire actions — delegate and expire are tracked as PB-032.
 - [x] Verify approval at execution time; do not trust a model's claim of approval — `staffer.verify_approval_execution` checks approved status, expiry and exact payload hash before protected execution can proceed
-- [ ] Add separation-of-duties rules for high-risk actions
-- [ ] Add mobile-friendly approval notifications
-- [ ] Add immutable decision history and reviewer comments
+- [ ] Add separation-of-duties rules for high-risk actions — tracked as PB-032.
+- [ ] Add mobile-friendly approval notifications — tracked as PB-032.
+- [ ] Add immutable decision history and reviewer comments — tracked as PB-032.
 
 **Acceptance:** Protected actions are impossible without a valid, unexpired approval record matching the exact action payload.
 
 ## Phase 8 — Knowledge and memory
 
-- [ ] Implement document upload, virus scan, metadata and versioning — PB-024 added manual text ingestion, scan-status metadata and append-only document versions; binary upload and real virus scanning remain open.
-- [ ] Implement extraction, chunking, embeddings and citation-aware retrieval — PB-024 added text extraction, chunking, full-text retrieval, citation JSON and embedding status tracking; generated embeddings remain open.
+- [x] Implement document upload, virus scan, metadata and versioning — PB-033 completed Supabase Storage-backed upload metadata, private bucket policies, built-in file safety scanning, blocked-upload review records and document-version snapshots for searchable and manual-review uploads.
+- [x] Implement extraction, chunking, embeddings and citation-aware retrieval — PB-033 completed supported text extraction, citation-ready chunking, deterministic 64-dimension embeddings and hybrid full-text/vector retrieval while preserving source citations.
 - [x] Add collection-level access control and agent permissions — PB-024 added `knowledge_collections` and `knowledge_collection_agents` with agent retrieval enforcement in the search RPC.
 - [x] Add source freshness and review dates — PB-024 added review interval, review due, retention and legal-hold metadata.
-- [ ] Add retrieval filters by organisation, project, customer and sensitivity — PB-024 enforces organisation boundaries and collection filters; project/customer/sensitivity filters remain open.
-- [ ] Separate task memory, customer memory, project memory and company knowledge
-- [ ] Require policy or human approval before long-term memory promotion
-- [ ] Implement retention, deletion and legal-hold controls — PB-024 added retention dates and legal-hold metadata; deletion/expiry workflows remain open.
+- [x] Add retrieval filters by organisation, project, customer and sensitivity — PB-033 completed tenant-safe search filters for memory scope, project key, customer key and sensitivity, with retrieval events recording the applied filter set.
+- [x] Separate task memory, customer memory, project memory and company knowledge — PB-033 added memory scopes across collections, documents, versions, chunks, repository data and Knowledge Hub UI.
+- [x] Require policy or human approval before long-term memory promotion — PB-033 creates exact-payload `knowledge.memory_promotion` approvals and applies document/chunk scope changes only after approval.
+- [x] Implement retention, deletion and legal-hold controls — PB-033 added legal-hold toggles, approved retention-deletion requests, soft retirement from retrieval, retention expiry retirement controls and audit events.
 - [x] Add answer citations and source preview — PB-024 returns citation JSON and source excerpts from approved chunks.
 
 **Acceptance:** Every knowledge-grounded answer identifies its sources and agents cannot retrieve unauthorised collections.
@@ -178,16 +187,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 9 — First live workflows
 
 ### Customer Support Triage
-- [ ] Gmail event creates queued task — PB-025 added a manual intake path plus idempotent `source_message_id` support for Gmail events; Gmail connector ingestion remains open.
+- [ ] Gmail event creates queued task — PB-031 will add Gmail connector ingestion on top of PB-025's manual intake path and idempotent `source_message_id`.
 - [x] Anna classifies customer, product, category, severity, sentiment, onboarding state, and SLA — PB-025 added settings-driven classification from support message content, product area and tenant severity/category rules.
 - [x] Retrieve approved knowledge and similar resolved cases — PB-025 calls the approved knowledge search RPC and stores retrieved citations on each support case; similar resolved-case retrieval remains a later enhancement.
 - [x] Anna performs approved first-line troubleshooting and drafts a professional, casual response with no unsupported commitments — PB-025 creates a citation-backed draft response and explicitly blocks customer-visible execution until approval.
 - [x] Route banking-application, access, data, security, compliance, or critical-incident concerns to the correct specialist without exposing sensitive information — PB-025 stores escalation targets from tenant routing rules for Anna, Nakamura and Lawal.
-- [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — PB-025 flags Nakamura review requirements; actual reviewer decision capture remains open.
-- [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — PB-025 flags Lawal review requirements; actual compliance review capture remains open.
+- [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — tracked as PB-034.
+- [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — tracked as PB-034.
 - [x] Human approves external send — PB-025 creates a pending approval with exact payload hash for the support draft before any customer-visible action can proceed.
-- [x] Send or create draft based on organisation policy — PB-025A added the approved Brevo send path for Anna support responses: approval must be recorded, the stored payload is re-verified by `staffer.verify_approval_execution`, Brevo sends server-side, and case/task/workflow/audit evidence is updated. Gmail draft creation remains optional future work.
-- [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — PB-025 records task evidence; Kristin documentation follow-up remains open.
+- [x] Send or create draft based on organisation policy — PB-025A added the approved Brevo send path for Anna support responses: approval must be recorded, the stored payload is re-verified by `staffer.verify_approval_execution`, Brevo sends server-side, and case/task/workflow/audit evidence is updated. Gmail draft creation is tracked as PB-031.
+- [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — tracked as PB-034.
 
 ### Feature Intake
 - [x] Capture feedback from form, email or manual input - manual live intake is implemented with `source_type`/`source_reference` fields ready for email/form/API idempotency.
@@ -198,7 +207,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Nakamura drafts acceptance, security, and release-risk tests - feature intake action stores `nakamura_test_plan`.
 - [x] Lawal identifies applicable data-protection, CQC, financial-services, ISO, audit, and policy-governance controls - feature intake action stores `lawal_compliance_review`.
 - [x] Founder approves roadmap or backlog outcome - feature intake now creates a pending approval with exact payload hash and reviewer count based on risk.
-- [ ] Create GitHub issue with evidence links - governed execution action is implemented with exact-payload verification, issue creation telemetry, task/workflow/audit evidence and duplicate execution blocking; production is still blocked until `ossykelvin/staffer-product` exists and `GITHUB_ISSUE_TOKEN` is configured in Vercel.
+- [ ] Create GitHub issue with evidence links - tracked as PB-035; governed execution action is implemented with exact-payload verification, issue creation telemetry, task/workflow/audit evidence and duplicate execution blocking, and production readiness now needs repo/token verification.
 
 ### Documentation Lifecycle
 - [ ] Trigger from an approved feature, process, policy, release, or resolved support case

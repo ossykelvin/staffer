@@ -212,6 +212,9 @@ export const knowledgeCollectionSchema = z.object({
   description: z.string().trim().nullable().optional(),
   sensitivity: nonEmptyString,
   accessMode: nonEmptyString,
+  memoryScope: nonEmptyString.optional(),
+  projectKey: z.string().trim().nullable().optional(),
+  customerKey: z.string().trim().nullable().optional(),
   documentCount: z.number().int().nonnegative(),
   chunkCount: z.number().int().nonnegative(),
   retrievalCount: z.number().int().nonnegative().optional(),
@@ -226,15 +229,27 @@ export const knowledgeDocumentSchema = z.object({
   collectionId: nonEmptyString.nullable().optional(),
   collectionName: nonEmptyString.nullable().optional(),
   sourceUrl: z.string().trim().nullable().optional(),
+  storagePath: z.string().trim().nullable().optional(),
+  originalFilename: z.string().trim().nullable().optional(),
+  fileSizeBytes: z.number().int().nonnegative().nullable().optional(),
+  uploadStatus: nonEmptyString.optional(),
   sensitivity: nonEmptyString,
+  memoryScope: nonEmptyString.optional(),
+  projectKey: z.string().trim().nullable().optional(),
+  customerKey: z.string().trim().nullable().optional(),
   status: nonEmptyString,
   version: z.number().int().positive(),
   scanStatus: nonEmptyString,
+  scanSummary: z.string().trim().nullable().optional(),
   extractionStatus: nonEmptyString,
   embeddingStatus: nonEmptyString,
   reviewDueAt: z.string().trim().nullable().optional(),
   retentionUntil: z.string().trim().nullable().optional(),
   legalHold: z.boolean(),
+  promotionApprovalId: z.string().trim().nullable().optional(),
+  deletionApprovalId: z.string().trim().nullable().optional(),
+  deletionRequestedAt: z.string().trim().nullable().optional(),
+  deletedAt: z.string().trim().nullable().optional(),
   updatedAt: nonEmptyString,
 });
 
@@ -249,6 +264,11 @@ export const knowledgeSearchResultSchema = z.object({
   excerpt: nonEmptyString,
   citation: z.record(z.string(), z.unknown()),
   rank: z.number(),
+  semanticSimilarity: z.number().nullable().optional(),
+  sensitivity: nonEmptyString.optional(),
+  memoryScope: nonEmptyString.optional(),
+  projectKey: z.string().trim().nullable().optional(),
+  customerKey: z.string().trim().nullable().optional(),
 });
 
 export const knowledgeHubDataSchema = z.object({
@@ -256,6 +276,14 @@ export const knowledgeHubDataSchema = z.object({
   documents: z.array(knowledgeDocumentSchema),
   searchResults: z.array(knowledgeSearchResultSchema),
   query: z.string(),
+  filters: z
+    .object({
+      memoryScope: z.string().trim().optional(),
+      sensitivity: z.string().trim().optional(),
+      projectKey: z.string().trim().optional(),
+      customerKey: z.string().trim().optional(),
+    })
+    .optional(),
 });
 
 export const supportTriageCaseSchema = z.object({

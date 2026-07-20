@@ -8,6 +8,7 @@ import { publicEnv } from "@/lib/env";
 import { createApprovedGitHubIssue } from "@/lib/github/issues";
 import { recordAuditEvent } from "@/lib/audit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { assertAgentToolPermission } from "@/lib/tools/permissions";
 
 const decisionToStatus: Record<string, string> = {
   approved: "approved",
@@ -75,7 +76,7 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
     const { data: approval, error: readError } = await supabase
       .schema("staffer")
       .from("approvals")
-      .select("id, organisation_id, action_key, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count")
+      .select("id, organisation_id, action_key, action_payload, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count")
       .eq("id", approvalId)
       .eq("organisation_id", membership.organisation_id)
       .maybeSingle();
@@ -164,7 +165,154 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
       }
     }
 
+    if (String(approval.action_key ?? "") === "knowledge.memory_promotion") {
+      const promotionStatus =
+        finalStatus === "approved"
+          ? "applied"
+          : finalStatus === "rejected"
+            ? "rejected"
+            : finalStatus === "changes_requested"
+              ? "changes_requested"
+              : null;
+      const payload = asRecord(approval.action_payload);
+      const documentId = typeof payload.documentId === "string" ? payload.documentId : null;
+      const targetMemoryScope = typeof payload.targetMemoryScope === "string" ? payload.targetMemoryScope : null;
+
+      const promotionWrites = await Promise.all([
+        promotionStatus
+          ? supabase
+              .schema("staffer")
+              .from("knowledge_memory_promotions")
+              .update({ status: promotionStatus, updated_at: new Date().toISOString() })
+              .eq("approval_id", approval.id)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+        promotionStatus === "applied" && documentId && targetMemoryScope
+          ? supabase
+              .schema("staffer")
+              .from("documents")
+              .update({ memory_scope: targetMemoryScope, updated_at: new Date().toISOString() })
+              .eq("id", documentId)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+        promotionStatus === "applied" && documentId && targetMemoryScope
+          ? supabase
+              .schema("staffer")
+              .from("document_chunks")
+              .update({ memory_scope: targetMemoryScope })
+              .eq("document_id", documentId)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+      ]);
+
+      const failedPromotionWrite = promotionWrites.find((result) => result.error);
+      if (failedPromotionWrite?.error) {
+        return {
+          mode: "error" as const,
+          eventType: "approval.decision_failed",
+          summary: failedPromotionWrite.error.message,
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+      if (promotionStatus && documentId) {
+        await recordAuditEvent({
+          organisationId: membership.organisation_id,
+          actorType: "user",
+          actorId: user.id,
+          eventType: promotionStatus === "applied" ? "knowledge.memory_promoted" : `knowledge.memory_promotion_${promotionStatus}`,
+          entityType: "document",
+          entityId: documentId,
+          summary:
+            promotionStatus === "applied"
+              ? "Approved knowledge memory promotion was applied to the document and chunks."
+              : `Knowledge memory promotion was marked ${promotionStatus}.`,
+          details: {
+            approvalId: approval.id,
+            documentId,
+            sourceMemoryScope: typeof payload.sourceMemoryScope === "string" ? payload.sourceMemoryScope : null,
+            targetMemoryScope,
+          },
+        });
+      }
+    }
+
+    if (String(approval.action_key ?? "") === "knowledge.retention_delete") {
+      const now = new Date().toISOString();
+      const retentionStatus =
+        finalStatus === "approved"
+          ? "executed"
+          : finalStatus === "rejected"
+            ? "rejected"
+            : finalStatus === "changes_requested"
+              ? "changes_requested"
+              : null;
+      const payload = asRecord(approval.action_payload);
+      const documentId = typeof payload.documentId === "string" ? payload.documentId : null;
+      const retentionWrites = await Promise.all([
+        retentionStatus
+          ? supabase
+              .schema("staffer")
+              .from("knowledge_retention_actions")
+              .update({ status: retentionStatus, executed_at: retentionStatus === "executed" ? now : null })
+              .eq("approval_id", approval.id)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+        retentionStatus === "executed" && documentId
+          ? supabase
+              .schema("staffer")
+              .from("documents")
+              .update({ status: "retired", deleted_at: now, updated_at: now })
+              .eq("id", documentId)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+        retentionStatus && retentionStatus !== "executed" && documentId
+          ? supabase
+              .schema("staffer")
+              .from("documents")
+              .update({ status: "approved", updated_at: new Date().toISOString() })
+              .eq("id", documentId)
+              .eq("organisation_id", membership.organisation_id)
+          : Promise.resolve({ error: null }),
+      ]);
+
+      const failedRetentionWrite = retentionWrites.find((result) => result.error);
+      if (failedRetentionWrite?.error) {
+        return {
+          mode: "error" as const,
+          eventType: "approval.decision_failed",
+          summary: failedRetentionWrite.error.message,
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+      if (retentionStatus && documentId) {
+        await recordAuditEvent({
+          organisationId: membership.organisation_id,
+          actorType: "user",
+          actorId: user.id,
+          eventType: retentionStatus === "executed" ? "knowledge.retention_delete_executed" : `knowledge.retention_delete_${retentionStatus}`,
+          entityType: "document",
+          entityId: documentId,
+          summary:
+            retentionStatus === "executed"
+              ? "Approved retention deletion was executed as a soft retirement from retrieval."
+              : `Knowledge retention deletion request was marked ${retentionStatus}.`,
+          details: {
+            approvalId: approval.id,
+            documentId,
+            retentionActionId: typeof payload.retentionActionId === "string" ? payload.retentionActionId : null,
+            storageBucket: typeof payload.storageBucket === "string" ? payload.storageBucket : null,
+            storagePath: typeof payload.storagePath === "string" ? payload.storagePath : null,
+          },
+        });
+      }
+    }
+
     revalidatePath(`/approvals/${approvalId}`);
+    if (String(approval.action_key ?? "").startsWith("knowledge.")) {
+      revalidatePath("/knowledge");
+    }
   }
 
   return recordAuditEvent({
@@ -206,7 +354,7 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
     const { data: approval, error: approvalError } = await supabase
       .schema("staffer")
       .from("approvals")
-      .select("id, organisation_id, task_id, workflow_run_id, action_key, action_payload, status, execution_status")
+      .select("id, organisation_id, task_id, workflow_run_id, requested_by_agent_id, action_key, action_payload, status, execution_status")
       .eq("id", approvalId)
       .eq("organisation_id", membership.organisation_id)
       .maybeSingle();
@@ -255,6 +403,28 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
       throw new Error(String(verificationResult?.failure_reason ?? "Exact approval payload verification failed."));
     }
 
+    const githubCreatePermission = await assertAgentToolPermission({
+      supabase,
+      organisationId: membership.organisation_id,
+      agentId: typeof approval.requested_by_agent_id === "string" ? approval.requested_by_agent_id : null,
+      toolKey: "github_issue_draft",
+      actionKey: "github.issue_create",
+      actorUserId: user.id,
+      taskId: featureRequest.task_id ?? approval.task_id ?? null,
+      workflowRunId: featureRequest.workflow_run_id ?? approval.workflow_run_id ?? null,
+      approvalId: approval.id,
+      approvalMode: "approved_execution",
+      workflowAllowedActions: ["github.issue_create"],
+      workflowRequiresApproval: true,
+      inputSummary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
+      riskClass: 4,
+      metadata: {
+        source: "feature_intake",
+        repository: payloadString(actionPayload, "repository"),
+        verificationCheckId: verificationResult?.check_id,
+      },
+    });
+
     let issueResult: Awaited<ReturnType<typeof createApprovedGitHubIssue>>;
     try {
       issueResult = await createApprovedGitHubIssue(actionPayload);
@@ -268,6 +438,8 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
           .eq("organisation_id", membership.organisation_id),
         supabase.schema("staffer").from("tool_execution_logs").insert({
           organisation_id: membership.organisation_id,
+          tool_id: githubCreatePermission.toolId,
+          agent_id: githubCreatePermission.agentId,
           task_id: featureRequest.task_id ?? approval.task_id,
           workflow_run_id: featureRequest.workflow_run_id ?? approval.workflow_run_id,
           approval_id: approval.id,
@@ -350,6 +522,8 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
         : Promise.resolve({ error: null }),
       supabase.schema("staffer").from("tool_execution_logs").insert({
         organisation_id: membership.organisation_id,
+        tool_id: githubCreatePermission.toolId,
+        agent_id: githubCreatePermission.agentId,
         task_id: taskId || null,
         workflow_run_id: workflowRunId || null,
         approval_id: approval.id,
@@ -472,7 +646,7 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
     const { data: approval, error: approvalError } = await supabase
       .schema("staffer")
       .from("approvals")
-      .select("id, organisation_id, task_id, workflow_run_id, action_key, action_payload, status, execution_status")
+      .select("id, organisation_id, task_id, workflow_run_id, requested_by_agent_id, action_key, action_payload, status, execution_status")
       .eq("id", approvalId)
       .eq("organisation_id", membership.organisation_id)
       .maybeSingle();
@@ -528,6 +702,28 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
       throw new Error(String(verificationResult?.failure_reason ?? "Exact approval payload verification failed."));
     }
 
+    const supportSendPermission = await assertAgentToolPermission({
+      supabase,
+      organisationId: membership.organisation_id,
+      agentId: typeof approval.requested_by_agent_id === "string" ? approval.requested_by_agent_id : null,
+      toolKey: "email_draft",
+      actionKey: "support.response_send",
+      actorUserId: user.id,
+      taskId: supportCase.task_id ?? approval.task_id ?? null,
+      workflowRunId: supportCase.workflow_run_id ?? approval.workflow_run_id ?? null,
+      approvalId: approval.id,
+      approvalMode: "approved_execution",
+      workflowAllowedActions: ["support.response_send"],
+      workflowRequiresApproval: true,
+      inputSummary: subject,
+      riskClass: 4,
+      metadata: {
+        source: "support_triage",
+        recipientDomain: recipientDomain(recipient),
+        verificationCheckId: verificationResult?.check_id,
+      },
+    });
+
     let emailResult: Awaited<ReturnType<typeof sendTransactionalEmail>>;
     try {
       emailResult = await sendTransactionalEmail({
@@ -555,6 +751,27 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
           .update({ external_action_status: "sent_blocked", updated_at: new Date().toISOString() })
           .eq("id", supportCase.id)
           .eq("organisation_id", membership.organisation_id),
+        supabase.schema("staffer").from("tool_execution_logs").insert({
+          organisation_id: membership.organisation_id,
+          tool_id: supportSendPermission.toolId,
+          agent_id: supportSendPermission.agentId,
+          task_id: supportCase.task_id ?? approval.task_id,
+          workflow_run_id: supportCase.workflow_run_id ?? approval.workflow_run_id,
+          approval_id: approval.id,
+          action_key: "support.response_send",
+          status: "failed",
+          risk_class: 4,
+          input_summary: subject,
+          output_summary: "Support email send failed before the provider accepted it.",
+          redaction_summary: "Email body remains in approved payload evidence; telemetry stores subject, recipient domain and failure reason only.",
+          idempotency_key: `support-triage:email-send:${supportCase.id}`,
+          metadata: {
+            recipientDomain: recipientDomain(recipient),
+            verificationCheckId: verificationResult?.check_id,
+            reason: sendError instanceof Error ? sendError.message : "Unknown support email send failure.",
+          },
+          created_by: user.id,
+        }),
       ]);
 
       await recordAuditEvent({
@@ -598,6 +815,29 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
         })
         .eq("id", supportCase.id)
         .eq("organisation_id", membership.organisation_id),
+      supabase.schema("staffer").from("tool_execution_logs").insert({
+        organisation_id: membership.organisation_id,
+        tool_id: supportSendPermission.toolId,
+        agent_id: supportSendPermission.agentId,
+        task_id: taskId || null,
+        workflow_run_id: workflowRunId || null,
+        approval_id: approval.id,
+        action_key: "support.response_send",
+        status: "succeeded",
+        risk_class: 4,
+        input_summary: subject,
+        output_summary: emailResult.messageId ? `Support email accepted with message id ${emailResult.messageId}.` : "Support email accepted by provider.",
+        redaction_summary: "Email body remains in approval evidence; execution telemetry stores provider metadata and recipient domain.",
+        idempotency_key: `support-triage:email-send:${supportCase.id}`,
+        metadata: {
+          provider: emailResult.provider,
+          mode: emailResult.mode,
+          messageId: emailResult.messageId,
+          verificationCheckId: verificationResult?.check_id,
+          recipientDomain: recipientDomain(recipient),
+        },
+        created_by: user.id,
+      }),
       taskId
         ? supabase.schema("staffer").from("task_evidence_events").insert({
             organisation_id: membership.organisation_id,
