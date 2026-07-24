@@ -7,6 +7,7 @@ import { getCurrentMembership, getCurrentUser } from "@/lib/auth";
 import { publicEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { assertAgentToolPermission } from "@/lib/tools/permissions";
+import { runApprovalRequestTool, runDocumentDraftTool, runKnowledgeSearchTool } from "@/lib/tools/internal";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -305,32 +306,23 @@ export async function startSupportTriageAction(formData: FormData) {
     }
 
     const knowledgeQuery = buildKnowledgeQuery(subject, messageBody, classification);
-    await assertAgentToolPermission({
+    const searchResults = await runKnowledgeSearchTool({
       supabase: context.supabase,
       organisationId: context.membership.organisation_id,
       agentId: typeof annaAgent?.id === "string" ? annaAgent.id : null,
-      toolKey: "knowledge_search",
-      actionKey: "knowledge.search",
       actorUserId: context.user.id,
       taskId: task.id,
       workflowRunId,
-      approvalMode: "none",
-      workflowAllowedActions: ["knowledge.search"],
-      inputSummary: knowledgeQuery.slice(0, 240),
+      query: knowledgeQuery,
+      collectionKeys: knowledgeCollectionKeys,
+      limit: 4,
       riskClass: classification.riskClass,
       metadata: {
         workflowKey,
         source: "support_triage",
+        replacesDirectRpc: "search_knowledge_chunks",
       },
     });
-
-    const { data: searchData } = await context.supabase.schema("staffer").rpc("search_knowledge_chunks", {
-      target_query: knowledgeQuery,
-      target_agent_id: typeof annaAgent?.id === "string" ? annaAgent.id : null,
-      target_collection_keys: knowledgeCollectionKeys.length ? knowledgeCollectionKeys : null,
-      target_limit: 4,
-    });
-    const searchResults = Array.isArray(searchData) ? (searchData as JsonRecord[]) : [];
     const retrievedChunkIds = searchResults.map((result) => String(result.chunk_id)).filter(Boolean);
     const citations = searchResults.map((result) => ({
       chunkId: result.chunk_id,
@@ -365,6 +357,7 @@ export async function startSupportTriageAction(formData: FormData) {
       approvalMode: "approval_request",
       workflowAllowedActions: ["support.response_draft"],
       workflowRequiresApproval: true,
+      integrationKey: "email",
       inputSummary: subject.slice(0, 240),
       riskClass: classification.riskClass,
       metadata: {
@@ -374,40 +367,32 @@ export async function startSupportTriageAction(formData: FormData) {
       },
     });
 
-    const hashResult = await context.supabase.schema("staffer").rpc("approval_payload_hash", {
-      target_payload: actionPayload,
+    const approval = await runApprovalRequestTool({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof annaAgent?.id === "string" ? annaAgent.id : null,
+      actorUserId: context.user.id,
+      taskId: task.id,
+      workflowRunId,
+      actionKey: "support.response_draft",
+      actionPayload,
+      riskClass: classification.riskClass,
+      requiredReviewerCount: classification.riskClass >= 4 ? 2 : 1,
+      policySnapshot: {
+        source: "PB-025 Customer Support Triage",
+        externalSendRequiresApproval: policy.externalSendRequiresApproval !== false,
+        responseAction,
+        escalationTargets,
+      },
+      metadata: {
+        workflowKey,
+        source: "support_triage",
+      },
     });
-    if (hashResult.error || typeof hashResult.data !== "string") {
-      throw new Error(hashResult.error?.message ?? "Unable to hash approval payload.");
-    }
 
-    const { data: approval, error: approvalError } = await context.supabase
-      .schema("staffer")
-      .from("approvals")
-      .insert({
-        organisation_id: context.membership.organisation_id,
-        task_id: task.id,
-        workflow_run_id: workflowRunId,
-        requested_by_agent_id: typeof annaAgent?.id === "string" ? annaAgent.id : null,
-        requested_by_user_id: context.user.id,
-        action_key: "support.response_draft",
-        action_payload: actionPayload,
-        payload_hash: hashResult.data,
-        risk_class: classification.riskClass,
-        status: "pending",
-        required_reviewer_count: classification.riskClass >= 4 ? 2 : 1,
-        policy_snapshot: {
-          source: "PB-025 Customer Support Triage",
-          externalSendRequiresApproval: policy.externalSendRequiresApproval !== false,
-          responseAction,
-          escalationTargets,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (approvalError || !approval?.id) {
-      throw new Error(approvalError?.message ?? "Unable to create approval request.");
+    const approvalId = typeof approval.id === "string" ? approval.id : "";
+    if (!approvalId) {
+      throw new Error("Unable to create approval request.");
     }
 
     const { data: supportCase, error: caseError } = await context.supabase
@@ -417,7 +402,7 @@ export async function startSupportTriageAction(formData: FormData) {
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
         workflow_run_id: workflowRunId,
-        approval_id: approval.id,
+        approval_id: approvalId,
         source_type: sourceType,
         source_message_id: sourceMessageId || null,
         customer_name: customerName || null,
@@ -460,7 +445,7 @@ export async function startSupportTriageAction(formData: FormData) {
         event_type: "system",
         title: "Support triage case created",
         body: `Anna classified this as ${classification.severity} / ${classification.category.replace(/_/g, " ")} and prepared an approval-gated draft response.`,
-        metadata: { workflowEventType: "support_triage.case_created", supportCaseId: supportCase.id, approvalId: approval.id, citations },
+        metadata: { workflowEventType: "support_triage.case_created", supportCaseId: supportCase.id, approvalId, citations },
         created_by: context.user.id,
       }),
       context.supabase.schema("staffer").rpc("record_workflow_run_event", {
@@ -470,7 +455,7 @@ export async function startSupportTriageAction(formData: FormData) {
         target_event_type: "support_triage.draft_approval_requested",
         target_title: "Support draft approval requested",
         target_body: "Customer-visible response remains blocked pending human approval.",
-        target_metadata: { supportCaseId: supportCase.id, taskId: task.id, approvalId: approval.id },
+        target_metadata: { supportCaseId: supportCase.id, taskId: task.id, approvalId },
       }),
       recordAuditEvent({
         organisationId: context.membership.organisation_id,
@@ -484,7 +469,7 @@ export async function startSupportTriageAction(formData: FormData) {
           taskId: task.id,
           taskReference: task.reference,
           workflowRunId,
-          approvalId: approval.id,
+          approvalId,
           classification,
           escalationTargets,
           retrievedChunkCount: retrievedChunkIds.length,
@@ -504,5 +489,302 @@ export async function startSupportTriageAction(formData: FormData) {
       await recordSupportTriageFailure(contextForFailure, createdTask, error);
     }
     redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to create support triage case." });
+  }
+}
+
+function specialistConfig(specialistKey: string) {
+  if (specialistKey === "nakamura") {
+    return {
+      reviewType: "technical_security_release",
+      title: "Nakamura technical/security review completed",
+      body: "Technical accuracy, security, testing and release-risk review was recorded for this support case.",
+    };
+  }
+
+  if (specialistKey === "lawal") {
+    return {
+      reviewType: "data_protection_compliance",
+      title: "Lawal compliance review completed",
+      body: "Data-protection, regulated-industry, policy, evidence and reportability review was recorded for this support case.",
+    };
+  }
+
+  throw new Error("Specialist review must be for Nakamura or Lawal.");
+}
+
+export async function completeSupportSpecialistReviewAction(formData: FormData) {
+  const workflowKey = text(formData, "workflowKey") || "support-triage";
+  const supportCaseId = text(formData, "supportCaseId");
+  const specialistKey = text(formData, "specialistKey").toLowerCase();
+  const reviewerComment = text(formData, "reviewerComment");
+  const status = text(formData, "status") || "completed";
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirectWithParams(`/workflows/${workflowKey}`, { message: `Demo ${specialistKey || "specialist"} review recorded.` });
+  }
+
+  try {
+    if (!supportCaseId || !specialistKey || !reviewerComment) {
+      throw new Error("Support case, specialist and reviewer comment are required.");
+    }
+
+    const review = specialistConfig(specialistKey);
+    const context = await liveContext();
+    const { data: supportCase, error: caseError } = await context.supabase
+      .schema("staffer")
+      .from("support_triage_cases")
+      .select("id, task_id, workflow_run_id, subject, risk_class, escalation_targets, specialist_review_status")
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("id", supportCaseId)
+      .maybeSingle();
+    if (caseError || !supportCase) {
+      throw new Error(caseError?.message ?? "Support case was not found.");
+    }
+
+    const { data: specialistAgent } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("id")
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("key", specialistKey)
+      .maybeSingle();
+
+    const now = new Date().toISOString();
+    const findings = {
+      specialistKey,
+      reviewType: review.reviewType,
+      subject: String(supportCase.subject ?? "Support case"),
+      comment: reviewerComment,
+      riskClass: Number(supportCase.risk_class ?? 3),
+      reviewedAt: now,
+    };
+    const reviewStatus = status === "changes_requested" ? "changes_requested" : status === "blocked" ? "blocked" : "completed";
+    const writeResults = await Promise.all([
+      context.supabase.schema("staffer").from("support_specialist_reviews").upsert(
+        {
+          organisation_id: context.membership.organisation_id,
+          support_case_id: supportCase.id,
+          task_id: supportCase.task_id ?? null,
+          workflow_run_id: supportCase.workflow_run_id ?? null,
+          specialist_agent_id: typeof specialistAgent?.id === "string" ? specialistAgent.id : null,
+          specialist_key: specialistKey,
+          review_type: review.reviewType,
+          status: reviewStatus,
+          findings,
+          reviewer_comment: reviewerComment,
+          reviewed_by: context.user.id,
+          created_by: context.user.id,
+          reviewed_at: now,
+          updated_at: now,
+        },
+        { onConflict: "organisation_id,support_case_id,specialist_key,review_type" },
+      ),
+      context.supabase
+        .schema("staffer")
+        .from("support_triage_cases")
+        .update({
+          specialist_review_status: reviewStatus === "completed" ? "completed" : "blocked",
+          updated_at: now,
+        })
+        .eq("organisation_id", context.membership.organisation_id)
+        .eq("id", supportCase.id),
+      supportCase.task_id
+        ? context.supabase.schema("staffer").from("task_evidence_events").insert({
+            organisation_id: context.membership.organisation_id,
+            task_id: supportCase.task_id,
+            event_type: "specialist_review",
+            title: review.title,
+            body: reviewerComment,
+            metadata: { workflowEventType: "support_triage.specialist_review_completed", supportCaseId: supportCase.id, specialistKey, reviewType: review.reviewType, findings },
+            created_by: context.user.id,
+          })
+        : Promise.resolve({ error: null }),
+      supportCase.workflow_run_id
+        ? context.supabase.schema("staffer").rpc("record_workflow_run_event", {
+            target_organisation_id: context.membership.organisation_id,
+            target_workflow_run_id: supportCase.workflow_run_id,
+            target_step_run_id: null,
+            target_event_type: "support_triage.specialist_review_completed",
+            target_title: review.title,
+            target_body: review.body,
+            target_metadata: { supportCaseId: supportCase.id, specialistKey, reviewType: review.reviewType, reviewStatus },
+          })
+        : Promise.resolve({ error: null }),
+    ]);
+    const failedWrite = writeResults.find((result) => result?.error);
+    if (failedWrite?.error) {
+      throw new Error(failedWrite.error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: context.membership.organisation_id,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "support_triage.specialist_review_completed",
+      entityType: "support_triage_case",
+      entityId: supportCase.id,
+      summary: `${specialistKey} completed a governed support specialist review.`,
+      details: { supportCaseId: supportCase.id, specialistKey, reviewType: review.reviewType, reviewStatus, findings },
+    });
+
+    revalidatePath(`/workflows/${workflowKey}`);
+    revalidatePath("/tasks");
+    redirectWithParams(`/workflows/${workflowKey}`, { message: `${specialistKey} review recorded for support case.` });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to record specialist review." });
+  }
+}
+
+export async function createSupportKnowledgeFollowupAction(formData: FormData) {
+  const workflowKey = text(formData, "workflowKey") || "support-triage";
+  const supportCaseId = text(formData, "supportCaseId");
+  const reusableFinding = text(formData, "reusableFinding");
+  const draftTitle = text(formData, "draftTitle");
+  const draftContent = text(formData, "draftContent");
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirectWithParams(`/workflows/${workflowKey}`, { message: "Demo Kristin knowledge follow-up draft created." });
+  }
+
+  try {
+    if (!supportCaseId || !reusableFinding || !draftTitle || !draftContent) {
+      throw new Error("Support case, reusable finding, draft title and draft content are required.");
+    }
+
+    const context = await liveContext();
+    const { data: supportCase, error: caseError } = await context.supabase
+      .schema("staffer")
+      .from("support_triage_cases")
+      .select("id, task_id, workflow_run_id, subject, customer_email, citations")
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("id", supportCaseId)
+      .maybeSingle();
+    if (caseError || !supportCase) {
+      throw new Error(caseError?.message ?? "Support case was not found.");
+    }
+
+    const { data: kristinAgent } = await context.supabase
+      .schema("staffer")
+      .from("agents")
+      .select("id")
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("key", "kristin")
+      .maybeSingle();
+
+    const citations = Array.isArray(supportCase.citations) ? (supportCase.citations as JsonRecord[]) : [];
+    const draft = await runDocumentDraftTool({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof kristinAgent?.id === "string" ? kristinAgent.id : null,
+      actorUserId: context.user.id,
+      taskId: supportCase.task_id ?? null,
+      workflowRunId: supportCase.workflow_run_id ?? null,
+      title: draftTitle,
+      content: draftContent,
+      memoryScope: "company",
+      projectKey: "customer-support",
+      customerKey: null,
+      sensitivity: "internal",
+      riskClass: 2,
+      metadata: {
+        source: "support_triage",
+        supportCaseId: supportCase.id,
+        reusableFinding,
+        citations,
+      },
+    });
+
+    const documentId = typeof draft.id === "string" ? draft.id : null;
+    const now = new Date().toISOString();
+    const writeResults = await Promise.all([
+      context.supabase.schema("staffer").from("support_knowledge_followups").insert({
+        organisation_id: context.membership.organisation_id,
+        support_case_id: supportCase.id,
+        task_id: supportCase.task_id ?? null,
+        document_id: documentId,
+        status: documentId ? "draft_created" : "draft_requested",
+        reusable_finding: reusableFinding,
+        draft_title: draftTitle,
+        draft_content: draftContent,
+        citations,
+        created_by: context.user.id,
+        updated_at: now,
+      }),
+      context.supabase.schema("staffer").from("support_specialist_reviews").upsert(
+        {
+          organisation_id: context.membership.organisation_id,
+          support_case_id: supportCase.id,
+          task_id: supportCase.task_id ?? null,
+          workflow_run_id: supportCase.workflow_run_id ?? null,
+          specialist_agent_id: typeof kristinAgent?.id === "string" ? kristinAgent.id : null,
+          specialist_key: "kristin",
+          review_type: "knowledge_follow_up",
+          status: "completed",
+          findings: { reusableFinding, draftTitle, documentId, citations },
+          reviewer_comment: reusableFinding,
+          reviewed_by: context.user.id,
+          created_by: context.user.id,
+          reviewed_at: now,
+          updated_at: now,
+        },
+        { onConflict: "organisation_id,support_case_id,specialist_key,review_type" },
+      ),
+      context.supabase
+        .schema("staffer")
+        .from("support_triage_cases")
+        .update({ knowledge_followup_status: documentId ? "draft_created" : "draft_requested", updated_at: now })
+        .eq("organisation_id", context.membership.organisation_id)
+        .eq("id", supportCase.id),
+      supportCase.task_id
+        ? context.supabase.schema("staffer").from("task_evidence_events").insert({
+            organisation_id: context.membership.organisation_id,
+            task_id: supportCase.task_id,
+            event_type: "knowledge_followup",
+            title: "Kristin knowledge follow-up draft created",
+            body: reusableFinding,
+            metadata: { workflowEventType: "support_triage.knowledge_followup_created", supportCaseId: supportCase.id, documentId, draftTitle },
+            created_by: context.user.id,
+          })
+        : Promise.resolve({ error: null }),
+      supportCase.workflow_run_id
+        ? context.supabase.schema("staffer").rpc("record_workflow_run_event", {
+            target_organisation_id: context.membership.organisation_id,
+            target_workflow_run_id: supportCase.workflow_run_id,
+            target_step_run_id: null,
+            target_event_type: "support_triage.knowledge_followup_created",
+            target_title: "Kristin knowledge follow-up drafted",
+            target_body: "A reusable support finding was turned into a governed draft knowledge artifact.",
+            target_metadata: { supportCaseId: supportCase.id, documentId, draftTitle },
+          })
+        : Promise.resolve({ error: null }),
+    ]);
+    const failedWrite = writeResults.find((result) => result?.error);
+    if (failedWrite?.error) {
+      throw new Error(failedWrite.error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: context.membership.organisation_id,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: "support_triage.knowledge_followup_created",
+      entityType: "support_triage_case",
+      entityId: supportCase.id,
+      summary: "Reusable support finding was converted into a governed knowledge draft.",
+      details: { supportCaseId: supportCase.id, documentId, reusableFinding, draftTitle },
+    });
+
+    revalidatePath(`/workflows/${workflowKey}`);
+    revalidatePath("/knowledge");
+    revalidatePath("/tasks");
+    redirectWithParams(`/workflows/${workflowKey}`, { message: "Kristin knowledge follow-up draft created from support case." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to create knowledge follow-up." });
   }
 }

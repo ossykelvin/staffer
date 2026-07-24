@@ -19,6 +19,13 @@
     "verify:approved-email-execution": "node scripts/verify-approved-email-execution.mjs",
     "verify:identity-welcome-email": "node scripts/verify-identity-welcome-email.mjs",
     "verify:tool-permissions": "node scripts/verify-tool-permissions.mjs",
+    "verify:tool-runtime-controls": "node scripts/verify-tool-runtime-controls.mjs",
+    "verify:safe-internal-tools": "node scripts/verify-safe-internal-tools.mjs",
+    "verify:gmail-integration": "node scripts/verify-gmail-integration.mjs",
+    "verify:approval-centre": "node scripts/verify-approval-centre-completion.mjs",
+    "verify:support-specialist-loop": "node scripts/verify-support-specialist-loop.mjs",
+    "verify:github-readiness": "node scripts/verify-github-readiness.mjs",
+    "verify:workflow-lifecycle-foundations": "node scripts/verify-workflow-lifecycle-foundations.mjs",
     "verify:live-foundation": "node scripts/verify-live-foundation.mjs",
     "check": "npm run lint && npm run typecheck && npm run build"
   },

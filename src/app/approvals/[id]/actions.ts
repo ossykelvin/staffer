@@ -8,7 +8,8 @@ import { publicEnv } from "@/lib/env";
 import { createApprovedGitHubIssue } from "@/lib/github/issues";
 import { recordAuditEvent } from "@/lib/audit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { assertAgentToolPermission } from "@/lib/tools/permissions";
+import { assertAgentToolPermission, recordToolRuntimeOutcome } from "@/lib/tools/permissions";
+import { runGmailDraftCreateTool } from "@/lib/tools/gmail";
 
 const decisionToStatus: Record<string, string> = {
   approved: "approved",
@@ -57,6 +58,10 @@ function recipientDomain(email: string) {
   return domain?.toLowerCase() ?? "unknown";
 }
 
+function approvalActionUrl(approvalId: string) {
+  return `/approvals/${approvalId}`;
+}
+
 export async function stageApprovalDecisionAction(approvalId: string, decision: string) {
   const status = decisionToStatus[decision] ?? "changes_requested";
   const user = await getCurrentUser();
@@ -76,7 +81,9 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
     const { data: approval, error: readError } = await supabase
       .schema("staffer")
       .from("approvals")
-      .select("id, organisation_id, action_key, action_payload, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count")
+      .select(
+        "id, organisation_id, action_key, action_payload, status, payload_hash, policy_snapshot, required_reviewer_count, approved_reviewer_count, requested_by_user_id, risk_class, approval_mode, current_review_sequence, separation_of_duties_enforced, expires_at",
+      )
       .eq("id", approvalId)
       .eq("organisation_id", membership.organisation_id)
       .maybeSingle();
@@ -90,19 +97,58 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
       };
     }
 
+    const requestedByUserId = typeof approval.requested_by_user_id === "string" ? approval.requested_by_user_id : null;
+    const riskClass = Number(approval.risk_class ?? 1);
+    const separationRequired = approval.separation_of_duties_enforced === true || riskClass >= 4;
+    if (status === "approved" && separationRequired && requestedByUserId === user.id) {
+      return {
+        mode: "error" as const,
+        eventType: "approval.decision_failed",
+        summary: "Separation of duties blocks the requester from approving this high-risk action.",
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const currentSequence = Number(approval.current_review_sequence ?? 1);
+    const { data: existingSteps } = await supabase
+      .schema("staffer")
+      .from("approval_review_steps")
+      .select("id, sequence, status")
+      .eq("approval_id", approval.id)
+      .eq("organisation_id", membership.organisation_id)
+      .order("sequence", { ascending: true });
+
+    if (!existingSteps?.length) {
+      await supabase.schema("staffer").from("approval_review_steps").insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        sequence: 1,
+        reviewer_role: riskClass >= 4 ? "founder" : "reviewer",
+        status: "ready",
+        required: true,
+        expires_at: approval.expires_at ?? null,
+        created_by: user.id,
+      });
+    }
+
     const nextApprovedCount = status === "approved" ? Number(approval.approved_reviewer_count ?? 0) + 1 : Number(approval.approved_reviewer_count ?? 0);
     const requiredReviewerCount = Number(approval.required_reviewer_count ?? 1);
     const finalStatus = status === "approved" && nextApprovedCount < requiredReviewerCount ? "pending" : status;
 
-    const { error: decisionError } = await supabase.schema("staffer").from("approval_decisions").insert({
-      organisation_id: membership.organisation_id,
-      approval_id: approval.id,
-      decision: status,
-      comment: `Decision recorded through Staffer UI: ${status}`,
-      decided_by: user.id,
-      payload_hash_at_decision: approval.payload_hash,
-      policy_snapshot: approval.policy_snapshot ?? {},
-    });
+    const { data: decisionRecord, error: decisionError } = await supabase
+      .schema("staffer")
+      .from("approval_decisions")
+      .insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        decision: status,
+        comment: `Decision recorded through Staffer UI: ${status}`,
+        decided_by: user.id,
+        payload_hash_at_decision: approval.payload_hash,
+        policy_snapshot: approval.policy_snapshot ?? {},
+      })
+      .select("id")
+      .single();
 
     if (decisionError) {
       return {
@@ -113,18 +159,30 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
       };
     }
 
+    const nextSequence = status === "approved" && finalStatus === "pending" ? currentSequence + 1 : currentSequence;
     const { error } = await supabase
       .schema("staffer")
       .from("approvals")
       .update({
         status: finalStatus,
         decided_by: user.id,
-        decided_at: new Date().toISOString(),
+        decided_at: finalStatus === "pending" ? null : new Date().toISOString(),
         decision_comment:
           finalStatus === "pending"
             ? `Decision recorded. ${nextApprovedCount}/${requiredReviewerCount} approvals collected.`
             : `Decision recorded through Staffer UI: ${status}`,
         approved_reviewer_count: nextApprovedCount,
+        approval_mode: requiredReviewerCount > 1 ? "sequential" : "single",
+        current_review_sequence: nextSequence,
+        separation_of_duties_enforced: separationRequired,
+        mobile_notification_payload: {
+          title: `Approval ${finalStatus}`,
+          body:
+            finalStatus === "pending"
+              ? `${nextApprovedCount}/${requiredReviewerCount} approvals collected. Next reviewer is ready.`
+              : `Approval ${approval.id} was marked ${finalStatus}.`,
+          actionUrl: approvalActionUrl(approval.id),
+        },
       })
         .eq("id", approvalId)
         .eq("organisation_id", membership.organisation_id);
@@ -137,6 +195,54 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
         createdAt: new Date().toISOString(),
       };
     }
+
+    const decisionId = typeof decisionRecord?.id === "string" ? decisionRecord.id : null;
+    await Promise.allSettled([
+      supabase
+        .schema("staffer")
+        .from("approval_review_steps")
+        .update({
+          status,
+          decision_id: decisionId,
+          reviewer_user_id: user.id,
+          reviewer_comment: `Decision recorded through Staffer UI: ${status}`,
+          decided_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("approval_id", approval.id)
+        .eq("organisation_id", membership.organisation_id)
+        .eq("sequence", currentSequence),
+      finalStatus === "pending"
+        ? supabase.schema("staffer").from("approval_review_steps").upsert(
+            {
+              organisation_id: membership.organisation_id,
+              approval_id: approval.id,
+              sequence: nextSequence,
+              reviewer_role: riskClass >= 4 ? "founder" : "reviewer",
+              status: "ready",
+              required: true,
+              expires_at: approval.expires_at ?? null,
+              created_by: user.id,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "organisation_id,approval_id,sequence,reviewer_user_id" },
+          )
+        : Promise.resolve({ error: null }),
+      supabase.schema("staffer").from("approval_mobile_notifications").insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        recipient_user_id: finalStatus === "pending" ? null : requestedByUserId,
+        channel: "in_app",
+        title: finalStatus === "pending" ? "Approval advanced to next reviewer" : `Approval ${finalStatus}`,
+        body:
+          finalStatus === "pending"
+            ? `${nextApprovedCount}/${requiredReviewerCount} approvals collected. The next reviewer can continue.`
+            : `Approval ${approval.id} was marked ${finalStatus}.`,
+        action_url: approvalActionUrl(approval.id),
+        payload: { source: "PB-032", finalStatus, currentSequence, nextSequence, separationRequired },
+        created_by: user.id,
+      }),
+    ]);
 
     if (String(approval.action_key ?? "") === "github.issue_draft") {
       const featureStatus =
@@ -331,6 +437,264 @@ export async function stageApprovalDecisionAction(approvalId: string, decision: 
   });
 }
 
+export async function delegateApprovalStepAction(formData: FormData) {
+  const approvalId = text(formData, "approvalId");
+  const delegatedToUserId = text(formData, "delegatedToUserId");
+  const comment = text(formData, "comment") || "Approval review delegated through Staffer.";
+
+  try {
+    if (!approvalId || !delegatedToUserId) {
+      throw new Error("Approval id and delegate user id are required.");
+    }
+
+    const user = await getCurrentUser();
+    const membership = await getCurrentMembership();
+    const supabase = await getSupabaseServerClient();
+    if (!user || !membership?.organisation_id || !supabase) {
+      throw new Error("Delegating an approval requires an authenticated organisation member.");
+    }
+
+    const { data: approval, error: approvalError } = await supabase
+      .schema("staffer")
+      .from("approvals")
+      .select("id, payload_hash, policy_snapshot, current_review_sequence")
+      .eq("id", approvalId)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+    if (approvalError || !approval) {
+      throw new Error(approvalError?.message ?? "Approval was not found.");
+    }
+
+    const currentSequence = Number(approval.current_review_sequence ?? 1);
+    const { data: decision, error: decisionError } = await supabase
+      .schema("staffer")
+      .from("approval_decisions")
+      .insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        decision: "delegated",
+        comment,
+        decided_by: user.id,
+        payload_hash_at_decision: approval.payload_hash,
+        policy_snapshot: approval.policy_snapshot ?? {},
+      })
+      .select("id")
+      .single();
+    if (decisionError) {
+      throw new Error(decisionError.message);
+    }
+
+    await Promise.all([
+      supabase
+        .schema("staffer")
+        .from("approval_review_steps")
+        .update({
+          status: "delegated",
+          decision_id: decision.id,
+          delegated_to_user_id: delegatedToUserId,
+          delegated_by_user_id: user.id,
+          delegation_comment: comment,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("approval_id", approval.id)
+        .eq("organisation_id", membership.organisation_id)
+        .eq("sequence", currentSequence),
+      supabase.schema("staffer").from("approval_review_steps").insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        sequence: currentSequence + 1,
+        reviewer_user_id: delegatedToUserId,
+        required: true,
+        status: "ready",
+        delegated_by_user_id: user.id,
+        delegation_comment: comment,
+        created_by: user.id,
+      }),
+      supabase
+        .schema("staffer")
+        .from("approvals")
+        .update({
+          approval_mode: "sequential",
+          current_review_sequence: currentSequence + 1,
+          decision_comment: `Delegated to ${delegatedToUserId}: ${comment}`,
+          mobile_notification_payload: {
+            title: "Approval delegated",
+            body: comment,
+            actionUrl: approvalActionUrl(approval.id),
+          },
+        })
+        .eq("id", approval.id)
+        .eq("organisation_id", membership.organisation_id),
+      supabase.schema("staffer").from("approval_mobile_notifications").insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        recipient_user_id: delegatedToUserId,
+        channel: "in_app",
+        title: "Approval delegated to you",
+        body: comment,
+        action_url: approvalActionUrl(approval.id),
+        payload: { source: "PB-032", delegatedByUserId: user.id, currentSequence },
+        created_by: user.id,
+      }),
+    ]);
+
+    await recordAuditEvent({
+      organisationId: membership.organisation_id,
+      actorType: "user",
+      actorId: user.id,
+      eventType: "approval.delegated",
+      entityType: "approval",
+      entityId: approval.id,
+      summary: "Approval review step delegated.",
+      details: { approvalId: approval.id, delegatedToUserId, comment, source: "PB-032" },
+    });
+
+    revalidatePath(`/approvals/${approvalId}`);
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Approval review delegated and notification queued." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to delegate approval." });
+  }
+}
+
+export async function expireApprovalAction(formData: FormData) {
+  const approvalId = text(formData, "approvalId");
+  const comment = text(formData, "comment") || "Approval expired through Staffer.";
+
+  try {
+    if (!approvalId) {
+      throw new Error("Approval id is required.");
+    }
+
+    const user = await getCurrentUser();
+    const membership = await getCurrentMembership();
+    const supabase = await getSupabaseServerClient();
+    if (!user || !membership?.organisation_id || !supabase) {
+      throw new Error("Expiring an approval requires an authenticated organisation member.");
+    }
+
+    const { data: approval, error: approvalError } = await supabase
+      .schema("staffer")
+      .from("approvals")
+      .select("id, payload_hash, policy_snapshot")
+      .eq("id", approvalId)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+    if (approvalError || !approval) {
+      throw new Error(approvalError?.message ?? "Approval was not found.");
+    }
+
+    await Promise.all([
+      supabase.schema("staffer").from("approval_decisions").insert({
+        organisation_id: membership.organisation_id,
+        approval_id: approval.id,
+        decision: "expired",
+        comment,
+        decided_by: user.id,
+        payload_hash_at_decision: approval.payload_hash,
+        policy_snapshot: approval.policy_snapshot ?? {},
+      }),
+      supabase
+        .schema("staffer")
+        .from("approval_review_steps")
+        .update({ status: "expired", reviewer_comment: comment, decided_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("approval_id", approval.id)
+        .eq("organisation_id", membership.organisation_id)
+        .in("status", ["pending", "ready"]),
+      supabase
+        .schema("staffer")
+        .from("approvals")
+        .update({
+          status: "expired",
+          decided_by: user.id,
+          decided_at: new Date().toISOString(),
+          decision_comment: comment,
+          mobile_notification_payload: { title: "Approval expired", body: comment, actionUrl: approvalActionUrl(approval.id) },
+        })
+        .eq("id", approval.id)
+        .eq("organisation_id", membership.organisation_id),
+    ]);
+
+    await recordAuditEvent({
+      organisationId: membership.organisation_id,
+      actorType: "user",
+      actorId: user.id,
+      eventType: "approval.expired",
+      entityType: "approval",
+      entityId: approval.id,
+      summary: "Approval expired with reviewer history retained.",
+      details: { approvalId: approval.id, comment, source: "PB-032" },
+    });
+
+    revalidatePath(`/approvals/${approvalId}`);
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Approval expired and reviewer steps were closed." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to expire approval." });
+  }
+}
+
+export async function recordApprovalReviewerCommentAction(formData: FormData) {
+  const approvalId = text(formData, "approvalId");
+  const comment = text(formData, "comment");
+
+  try {
+    if (!approvalId || !comment) {
+      throw new Error("Approval id and comment are required.");
+    }
+
+    const user = await getCurrentUser();
+    const membership = await getCurrentMembership();
+    const supabase = await getSupabaseServerClient();
+    if (!user || !membership?.organisation_id || !supabase) {
+      throw new Error("Recording reviewer comments requires an authenticated organisation member.");
+    }
+
+    const { data: approval, error: approvalError } = await supabase
+      .schema("staffer")
+      .from("approvals")
+      .select("id, current_review_sequence")
+      .eq("id", approvalId)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+    if (approvalError || !approval) {
+      throw new Error(approvalError?.message ?? "Approval was not found.");
+    }
+
+    await Promise.allSettled([
+      supabase
+        .schema("staffer")
+        .from("approval_review_steps")
+        .update({ reviewer_comment: comment, reviewer_user_id: user.id, updated_at: new Date().toISOString() })
+        .eq("approval_id", approval.id)
+        .eq("organisation_id", membership.organisation_id)
+        .eq("sequence", Number(approval.current_review_sequence ?? 1)),
+      recordAuditEvent({
+        organisationId: membership.organisation_id,
+        actorType: "user",
+        actorId: user.id,
+        eventType: "approval.reviewer_comment_added",
+        entityType: "approval",
+        entityId: approval.id,
+        summary: "Reviewer comment recorded for approval.",
+        details: { approvalId: approval.id, comment, source: "PB-032" },
+      }),
+    ]);
+
+    revalidatePath(`/approvals/${approvalId}`);
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Reviewer comment recorded." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to record reviewer comment." });
+  }
+}
+
 export async function createApprovedGitHubIssueAction(formData: FormData) {
   const approvalId = text(formData, "approvalId");
 
@@ -416,6 +780,7 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
       approvalMode: "approved_execution",
       workflowAllowedActions: ["github.issue_create"],
       workflowRequiresApproval: true,
+      integrationKey: "github",
       inputSummary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
       riskClass: 4,
       metadata: {
@@ -444,6 +809,9 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
           workflow_run_id: featureRequest.workflow_run_id ?? approval.workflow_run_id,
           approval_id: approval.id,
           action_key: "github.issue_create",
+          integration_key: githubCreatePermission.integrationKey,
+          rate_limit_key: githubCreatePermission.rateLimitKey,
+          circuit_breaker_key: githubCreatePermission.circuitBreakerKey,
           status: "failed",
           risk_class: 4,
           input_summary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
@@ -474,6 +842,19 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
           reason: createError instanceof Error ? createError.message : "Unknown GitHub issue creation failure.",
           verificationCheckId: verificationResult?.check_id,
         },
+      });
+
+      await recordToolRuntimeOutcome({
+        supabase,
+        organisationId: membership.organisation_id,
+        toolId: githubCreatePermission.toolId,
+        toolKey: githubCreatePermission.toolKey,
+        actionKey: githubCreatePermission.actionKey,
+        integrationKey: githubCreatePermission.integrationKey,
+        circuitBreakerKey: githubCreatePermission.circuitBreakerKey,
+        status: "failed",
+        errorMessage: createError instanceof Error ? createError.message : "Unknown GitHub issue creation failure.",
+        metadata: { source: "feature_intake", repository: payloadString(actionPayload, "repository") },
       });
 
       throw createError;
@@ -528,6 +909,9 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
         workflow_run_id: workflowRunId || null,
         approval_id: approval.id,
         action_key: "github.issue_create",
+        integration_key: githubCreatePermission.integrationKey,
+        rate_limit_key: githubCreatePermission.rateLimitKey,
+        circuit_breaker_key: githubCreatePermission.circuitBreakerKey,
         status: "succeeded",
         risk_class: 4,
         input_summary: payloadString(actionPayload, "title") || "Approved Feature Intake GitHub issue",
@@ -586,6 +970,18 @@ export async function createApprovedGitHubIssueAction(formData: FormData) {
     if (failedWrite?.error) {
       throw new Error(failedWrite.error.message);
     }
+
+    await recordToolRuntimeOutcome({
+      supabase,
+      organisationId: membership.organisation_id,
+      toolId: githubCreatePermission.toolId,
+      toolKey: githubCreatePermission.toolKey,
+      actionKey: githubCreatePermission.actionKey,
+      integrationKey: githubCreatePermission.integrationKey,
+      circuitBreakerKey: githubCreatePermission.circuitBreakerKey,
+      status: "succeeded",
+      metadata: { source: "feature_intake", repository: issueResult.repository },
+    });
 
     await recordAuditEvent({
       organisationId: membership.organisation_id,
@@ -715,6 +1111,7 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
       approvalMode: "approved_execution",
       workflowAllowedActions: ["support.response_send"],
       workflowRequiresApproval: true,
+      integrationKey: "email",
       inputSummary: subject,
       riskClass: 4,
       metadata: {
@@ -759,6 +1156,9 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
           workflow_run_id: supportCase.workflow_run_id ?? approval.workflow_run_id,
           approval_id: approval.id,
           action_key: "support.response_send",
+          integration_key: supportSendPermission.integrationKey,
+          rate_limit_key: supportSendPermission.rateLimitKey,
+          circuit_breaker_key: supportSendPermission.circuitBreakerKey,
           status: "failed",
           risk_class: 4,
           input_summary: subject,
@@ -789,6 +1189,19 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
           reason: sendError instanceof Error ? sendError.message : "Unknown Brevo send failure.",
           verificationCheckId: verificationResult?.check_id,
         },
+      });
+
+      await recordToolRuntimeOutcome({
+        supabase,
+        organisationId: membership.organisation_id,
+        toolId: supportSendPermission.toolId,
+        toolKey: supportSendPermission.toolKey,
+        actionKey: supportSendPermission.actionKey,
+        integrationKey: supportSendPermission.integrationKey,
+        circuitBreakerKey: supportSendPermission.circuitBreakerKey,
+        status: "failed",
+        errorMessage: sendError instanceof Error ? sendError.message : "Unknown support email send failure.",
+        metadata: { source: "support_triage", recipientDomain: recipientDomain(recipient) },
       });
 
       throw sendError;
@@ -823,6 +1236,9 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
         workflow_run_id: workflowRunId || null,
         approval_id: approval.id,
         action_key: "support.response_send",
+        integration_key: supportSendPermission.integrationKey,
+        rate_limit_key: supportSendPermission.rateLimitKey,
+        circuit_breaker_key: supportSendPermission.circuitBreakerKey,
         status: "succeeded",
         risk_class: 4,
         input_summary: subject,
@@ -882,6 +1298,18 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
       throw new Error(failedWrite.error.message);
     }
 
+    await recordToolRuntimeOutcome({
+      supabase,
+      organisationId: membership.organisation_id,
+      toolId: supportSendPermission.toolId,
+      toolKey: supportSendPermission.toolKey,
+      actionKey: supportSendPermission.actionKey,
+      integrationKey: supportSendPermission.integrationKey,
+      circuitBreakerKey: supportSendPermission.circuitBreakerKey,
+      status: "succeeded",
+      metadata: { source: "support_triage", recipientDomain: recipientDomain(recipient) },
+    });
+
     await recordAuditEvent({
       organisationId: membership.organisation_id,
       actorType: "user",
@@ -913,6 +1341,240 @@ export async function sendApprovedSupportEmailAction(formData: FormData) {
       throw error;
     }
     redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to send approved support email." });
+  }
+}
+
+export async function createApprovedGmailDraftAction(formData: FormData) {
+  const approvalId = text(formData, "approvalId");
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Demo mode staged the approved Gmail draft. No Gmail draft was created." });
+  }
+
+  try {
+    if (!approvalId) {
+      throw new Error("Approval id is required before an approved Gmail draft can be created.");
+    }
+
+    const user = await getCurrentUser();
+    const membership = await getCurrentMembership();
+    const supabase = await getSupabaseServerClient();
+
+    if (!user || !membership?.organisation_id || !supabase) {
+      throw new Error("Approved Gmail draft creation requires an authenticated organisation member.");
+    }
+
+    const { data: approval, error: approvalError } = await supabase
+      .schema("staffer")
+      .from("approvals")
+      .select("id, organisation_id, task_id, workflow_run_id, requested_by_agent_id, action_key, action_payload, status, execution_status")
+      .eq("id", approvalId)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+
+    if (approvalError || !approval) {
+      throw new Error(approvalError?.message ?? "Approval was not found.");
+    }
+
+    const actionPayload = asRecord(approval.action_payload);
+    const actionKey = String(approval.action_key ?? actionPayload.action ?? "");
+    if (actionKey !== "support.response_draft") {
+      throw new Error("Only approved Customer Support Triage response drafts can create Gmail drafts.");
+    }
+
+    if (approval.status !== "approved") {
+      throw new Error("The support response must be approved before Staffer can create a Gmail draft.");
+    }
+
+    if (approval.execution_status === "executed") {
+      throw new Error("This approved support response has already been executed.");
+    }
+
+    const recipient = payloadString(actionPayload, "recipient");
+    const subject = payloadString(actionPayload, "subject");
+    const draftResponse = payloadString(actionPayload, "draftResponse");
+    if (!recipient || !subject || !draftResponse) {
+      throw new Error("The approved payload must include recipient, subject and draftResponse before Gmail draft creation.");
+    }
+
+    const { data: supportCase, error: supportCaseError } = await supabase
+      .schema("staffer")
+      .from("support_triage_cases")
+      .select("id, task_id, workflow_run_id")
+      .eq("approval_id", approval.id)
+      .eq("organisation_id", membership.organisation_id)
+      .maybeSingle();
+
+    if (supportCaseError || !supportCase) {
+      throw new Error(supportCaseError?.message ?? "No support triage case is linked to this approval.");
+    }
+
+    const verification = await supabase.schema("staffer").rpc("verify_approval_execution", {
+      target_approval_id: approval.id,
+      target_execution_payload: actionPayload,
+    });
+    if (verification.error) {
+      throw new Error(verification.error.message);
+    }
+
+    const verificationResult = Array.isArray(verification.data) ? verification.data[0] : verification.data;
+    if (!verificationResult?.verified) {
+      throw new Error(String(verificationResult?.failure_reason ?? "Exact approval payload verification failed."));
+    }
+
+    let draftResult: Awaited<ReturnType<typeof runGmailDraftCreateTool>>;
+    try {
+      draftResult = await runGmailDraftCreateTool({
+        supabase,
+        organisationId: membership.organisation_id,
+        agentId: typeof approval.requested_by_agent_id === "string" ? approval.requested_by_agent_id : null,
+        actorUserId: user.id,
+        taskId: supportCase.task_id ?? approval.task_id ?? null,
+        workflowRunId: supportCase.workflow_run_id ?? approval.workflow_run_id ?? null,
+        approvalId: approval.id,
+        to: recipient,
+        subject,
+        textBody: draftResponse,
+        threadId: payloadString(actionPayload, "gmailThreadId") || null,
+        inReplyTo: payloadString(actionPayload, "gmailMessageId") || null,
+        riskClass: 4,
+        metadata: {
+          source: "support_triage",
+          verificationCheckId: verificationResult?.check_id,
+          recipientDomain: recipientDomain(recipient),
+        },
+      });
+    } catch (draftError) {
+      await Promise.allSettled([
+        supabase
+          .schema("staffer")
+          .from("approvals")
+          .update({ execution_status: "failed" })
+          .eq("id", approval.id)
+          .eq("organisation_id", membership.organisation_id),
+        supabase
+          .schema("staffer")
+          .from("support_triage_cases")
+          .update({ external_action_status: "sent_blocked", updated_at: new Date().toISOString() })
+          .eq("id", supportCase.id)
+          .eq("organisation_id", membership.organisation_id),
+      ]);
+
+      await recordAuditEvent({
+        organisationId: membership.organisation_id,
+        actorType: "user",
+        actorId: user.id,
+        eventType: "support_triage.gmail_draft_failed",
+        entityType: "approval",
+        entityId: approval.id,
+        summary: "Approval-verified Gmail draft creation failed before Gmail accepted it.",
+        details: {
+          approvalId: approval.id,
+          supportCaseId: supportCase.id,
+          recipientDomain: recipientDomain(recipient),
+          reason: draftError instanceof Error ? draftError.message : "Unknown Gmail draft creation failure.",
+          verificationCheckId: verificationResult?.check_id,
+        },
+      });
+
+      throw draftError;
+    }
+
+    const now = new Date().toISOString();
+    const taskId = String(supportCase.task_id ?? approval.task_id ?? "");
+    const workflowRunId = String(supportCase.workflow_run_id ?? approval.workflow_run_id ?? "");
+    const writeResults = await Promise.all([
+      supabase
+        .schema("staffer")
+        .from("approvals")
+        .update({ execution_status: "executed" })
+        .eq("id", approval.id)
+        .eq("organisation_id", membership.organisation_id),
+      supabase
+        .schema("staffer")
+        .from("support_triage_cases")
+        .update({
+          draft_status: "approved",
+          external_action_status: "draft_created",
+          updated_at: now,
+        })
+        .eq("id", supportCase.id)
+        .eq("organisation_id", membership.organisation_id),
+      taskId
+        ? supabase.schema("staffer").from("task_evidence_events").insert({
+            organisation_id: membership.organisation_id,
+            task_id: taskId,
+            event_type: "support_triage.gmail_draft_created",
+            title: "Approved Gmail draft created",
+            body: "Anna's approved support response was exact-payload verified and saved as a Gmail draft. No email was sent.",
+            metadata: {
+              approvalId: approval.id,
+              supportCaseId: supportCase.id,
+              draftId: draftResult.id,
+              messageId: draftResult.messageId,
+              threadId: draftResult.threadId,
+              verificationCheckId: verificationResult?.check_id,
+              recipientDomain: recipientDomain(recipient),
+            },
+            created_by: user.id,
+          })
+        : Promise.resolve({ error: null }),
+      workflowRunId
+        ? supabase.schema("staffer").rpc("record_workflow_run_event", {
+            target_organisation_id: membership.organisation_id,
+            target_workflow_run_id: workflowRunId,
+            target_step_run_id: null,
+            target_event_type: "support_triage.gmail_draft_created",
+            target_title: "Approved Gmail draft created",
+            target_body: "Gmail accepted the approval-verified support response as a draft only.",
+            target_metadata: {
+              approvalId: approval.id,
+              supportCaseId: supportCase.id,
+              draftId: draftResult.id,
+              messageId: draftResult.messageId,
+              threadId: draftResult.threadId,
+              verificationCheckId: verificationResult?.check_id,
+            },
+          })
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const failedWrite = writeResults.find((result) => result?.error);
+    if (failedWrite?.error) {
+      throw new Error(failedWrite.error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: membership.organisation_id,
+      actorType: "user",
+      actorId: user.id,
+      eventType: "support_triage.gmail_draft_created",
+      entityType: "support_triage_case",
+      entityId: supportCase.id,
+      summary: "Approved support response was exact-payload verified and saved as a Gmail draft.",
+      details: {
+        approvalId: approval.id,
+        supportCaseId: supportCase.id,
+        taskId: taskId || null,
+        workflowRunId: workflowRunId || null,
+        draftId: draftResult.id,
+        messageId: draftResult.messageId,
+        threadId: draftResult.threadId,
+        recipientDomain: recipientDomain(recipient),
+        verificationCheckId: verificationResult?.check_id,
+      },
+    });
+
+    revalidatePath(`/approvals/${approvalId}`);
+    revalidatePath("/approvals");
+    revalidatePath("/tasks");
+    revalidatePath("/workflows/support-triage");
+    redirectWithParams(`/approvals/${approvalId}`, { message: "Approved support response verified and saved as a Gmail draft. No email was sent." });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/approvals/${approvalId || ""}`, { error: error instanceof Error ? error.message : "Unable to create approved Gmail draft." });
   }
 }
 

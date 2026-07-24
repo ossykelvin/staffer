@@ -7,6 +7,10 @@ import { approvals } from "@/lib/data";
 import { getApprovalDetailById } from "@/lib/repositories/staffer";
 import {
   createApprovedGitHubIssueAction,
+  createApprovedGmailDraftAction,
+  delegateApprovalStepAction,
+  expireApprovalAction,
+  recordApprovalReviewerCommentAction,
   sendApprovedSupportEmailAction,
   stageApprovalDecisionAction,
   verifyApprovalExecutionAction,
@@ -30,11 +34,12 @@ export default async function ApprovalDetailPage({
     notFound();
   }
 
-  const { approval, policyEvaluation, decisions, executionChecks } = detail;
+  const { approval, policyEvaluation, decisions, executionChecks, reviewSteps, mobileNotifications } = detail;
   const payload = approval.payload ?? {};
   const exactPayload = JSON.stringify(payload, null, 2);
   const isSupportResponseApproval = approval.type === "support.response_draft" || payload.action === "support.response_draft";
   const canExecuteSupportEmail = isSupportResponseApproval && approval.status === "approved" && approval.executionStatus !== "executed";
+  const canCreateGmailDraft = isSupportResponseApproval && approval.status === "approved" && approval.executionStatus !== "executed";
   const isFeatureIntakeIssueApproval = approval.type === "github.issue_draft" || payload.action === "github.issue_draft";
   const canCreateGitHubIssue = isFeatureIntakeIssueApproval && approval.status === "approved" && approval.executionStatus !== "executed";
 
@@ -117,6 +122,69 @@ export default async function ApprovalDetailPage({
           <DemoDecisionPanel approvalId={approval.id} onDecision={stageApprovalDecisionAction} />
 
           <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold text-white">Sequential review steps</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              PB-032 reviewer ordering, delegation and expiry state. High-risk actions enforce separation of duties before approval can execute.
+            </p>
+            <div className="mt-4 space-y-3">
+              {reviewSteps.length ? (
+                reviewSteps.map((step) => (
+                  <div key={step.id} className="rounded-xl border border-white/8 bg-black/10 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-200">Step {step.sequence}: {step.reviewerRole ?? step.reviewerUserId ?? "Reviewer"}</p>
+                      <StatusBadge value={step.status} />
+                    </div>
+                    {step.delegatedToUserId ? <p className="mt-2 text-sm text-cyan-100">Delegated to {step.delegatedToUserId}</p> : null}
+                    {step.delegationComment ? <p className="mt-1 text-sm leading-6 text-slate-500">{step.delegationComment}</p> : null}
+                    {step.reviewerComment ? <p className="mt-2 text-sm leading-6 text-slate-400">{step.reviewerComment}</p> : null}
+                    <p className="mt-2 text-xs text-slate-600">Available {new Date(step.availableAt).toLocaleString("en-GB")}{step.expiresAt ? ` / expires ${new Date(step.expiresAt).toLocaleString("en-GB")}` : ""}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-slate-500">No explicit review steps yet. The next decision will initialise a governed reviewer step.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold text-white">Reviewer comment / delegate / expire</h2>
+            <form action={recordApprovalReviewerCommentAction} className="mt-4 space-y-3">
+              <input type="hidden" name="approvalId" value={approval.id} />
+              <label className="block text-sm text-slate-400">
+                Reviewer comment
+                <textarea name="comment" rows={3} placeholder="Add review context, requested evidence, or decision rationale." className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-400/50" />
+              </label>
+              <button type="submit" className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/7">
+                Record reviewer comment
+              </button>
+            </form>
+            <form action={delegateApprovalStepAction} className="mt-5 space-y-3 rounded-xl border border-cyan-400/15 bg-cyan-400/5 p-4">
+              <input type="hidden" name="approvalId" value={approval.id} />
+              <label className="block text-sm text-slate-400">
+                Delegate to user id
+                <input name="delegatedToUserId" placeholder="Supabase auth user id" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400/50" />
+              </label>
+              <label className="block text-sm text-slate-400">
+                Delegation comment
+                <input name="comment" placeholder="Why this reviewer should take the next step" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400/50" />
+              </label>
+              <button type="submit" className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
+                Delegate next review
+              </button>
+            </form>
+            <form action={expireApprovalAction} className="mt-5 space-y-3 rounded-xl border border-rose-400/15 bg-rose-400/5 p-4">
+              <input type="hidden" name="approvalId" value={approval.id} />
+              <label className="block text-sm text-slate-400">
+                Expiry comment
+                <input name="comment" placeholder="Why this approval should expire now" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-rose-400/50" />
+              </label>
+              <button type="submit" className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-rose-950 transition hover:bg-rose-400">
+                Expire approval
+              </button>
+            </form>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
             <h2 className="font-semibold text-white">Execution verification</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
               This verifies approval status, expiry and exact payload hash. It does not execute the protected action.
@@ -164,6 +232,32 @@ export default async function ApprovalDetailPage({
             </div>
           ) : null}
 
+          {isSupportResponseApproval ? (
+            <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.06] p-6">
+              <h2 className="font-semibold text-white">Approved Gmail draft creation</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Staffer can also verify this exact support payload and save it as a Gmail draft. This does not send the email; sending remains a separate protected action.
+              </p>
+              <form action={createApprovedGmailDraftAction} className="mt-4 space-y-3">
+                <input type="hidden" name="approvalId" value={approval.id} />
+                <button
+                  type="submit"
+                  disabled={!canCreateGmailDraft}
+                  className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Create approved Gmail draft
+                </button>
+              </form>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                {approval.executionStatus === "executed"
+                  ? "This approval has already executed, so Staffer blocks duplicate Gmail drafts."
+                  : approval.status === "approved"
+                    ? "Ready: approval is recorded. The server action re-checks the payload hash and saves a draft only."
+                    : "Blocked until the approval status is approved."}
+              </p>
+            </div>
+          ) : null}
+
           {isFeatureIntakeIssueApproval ? (
             <div className="rounded-2xl border border-blue-400/15 bg-blue-400/[0.06] p-6">
               <h2 className="font-semibold text-white">Approved GitHub issue execution</h2>
@@ -204,6 +298,26 @@ export default async function ApprovalDetailPage({
                 ))
               ) : (
                 <p className="text-sm leading-6 text-slate-500">No live decisions recorded yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-6">
+            <h2 className="font-semibold text-white">Mobile-friendly notifications</h2>
+            <div className="mt-4 space-y-3">
+              {mobileNotifications.length ? (
+                mobileNotifications.map((notification) => (
+                  <div key={notification.id} className="rounded-xl border border-white/8 bg-black/10 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-200">{notification.title}</p>
+                      <StatusBadge value={notification.status} />
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{notification.body}</p>
+                    <p className="mt-2 text-xs text-slate-600">{notification.channel} / {new Date(notification.createdAt).toLocaleString("en-GB")}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-slate-500">No approval notifications queued yet.</p>
               )}
             </div>
           </div>

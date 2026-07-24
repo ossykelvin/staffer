@@ -199,6 +199,40 @@ export function getEmailEnv(environment: NodeJS.ProcessEnv = process.env) {
   return emailEnvSchema.parse(environment);
 }
 
+export const gmailEnvSchema = z
+  .object({
+    NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]).optional(),
+    GMAIL_CLIENT_ID: optionalString,
+    GMAIL_CLIENT_SECRET: optionalString,
+    GMAIL_REFRESH_TOKEN: optionalString,
+    GMAIL_SUPPORT_USER_ID: optionalString,
+    GMAIL_WEBHOOK_TOKEN: optionalString,
+  })
+  .superRefine((env, ctx) => {
+    if (env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      return;
+    }
+
+    const configured = Boolean(env.GMAIL_CLIENT_ID || env.GMAIL_CLIENT_SECRET || env.GMAIL_REFRESH_TOKEN);
+    if (!configured) {
+      return;
+    }
+
+    for (const key of ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"] as const) {
+      if (!env[key]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when Gmail integration is configured.`,
+        });
+      }
+    }
+  });
+
+export function getGmailEnv(environment: NodeJS.ProcessEnv = process.env) {
+  return gmailEnvSchema.parse(environment);
+}
+
 export const githubIssueEnvSchema = z.object({
   GITHUB_API_BASE_URL: optionalUrl,
   GITHUB_ISSUE_TOKEN: optionalString,

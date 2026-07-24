@@ -357,7 +357,7 @@ for (const phrase of ["startWorkflowRunAction", "transitionWorkflowRunAction", "
 }
 
 const supportTriageActions = readFileSync("src/app/workflows/[id]/support-triage-actions.ts", "utf8");
-for (const phrase of ["startSupportTriageAction", "ensure_support_triage_workflow", "search_knowledge_chunks", "approval_payload_hash", "support_triage_cases", "support_triage.case_created"]) {
+for (const phrase of ["startSupportTriageAction", "ensure_support_triage_workflow", "runKnowledgeSearchTool", "runApprovalRequestTool", "support_triage_cases", "support_triage.case_created"]) {
   if (!supportTriageActions.includes(phrase)) {
     throw new Error(`Missing support triage action phrase: ${phrase}`);
   }

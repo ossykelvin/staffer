@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
 import { StatusBadge } from "@/components/status-badge";
 import { replayWorkflowRunAction, startWorkflowRunAction, transitionWorkflowRunAction } from "@/app/workflows/[id]/actions";
-import { startFeatureIntakeAction } from "@/app/workflows/[id]/feature-intake-actions";
-import { startSupportTriageAction } from "@/app/workflows/[id]/support-triage-actions";
+import { startFeatureIntakeAction, verifyFeatureIntakeGitHubReadinessAction } from "@/app/workflows/[id]/feature-intake-actions";
+import { completeSupportSpecialistReviewAction, createSupportKnowledgeFollowupAction, startSupportTriageAction } from "@/app/workflows/[id]/support-triage-actions";
 import { workflows } from "@/lib/data";
 import { getWorkflowDryRun } from "@/lib/demo-details";
 import { getFeatureIntakeData, getSupportTriageData, getWorkflowById, getWorkflowExecutionDetail } from "@/lib/repositories/staffer";
@@ -334,6 +334,8 @@ export default async function WorkflowDetailPage({
                         <div className="flex flex-wrap gap-2">
                           <StatusBadge value={supportCase.severity} />
                           <StatusBadge value={supportCase.externalActionStatus} />
+                          <StatusBadge value={supportCase.specialistReviewStatus ?? "pending_review"} />
+                          <StatusBadge value={supportCase.knowledgeFollowupStatus ?? "not_required"} />
                         </div>
                       </div>
                       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
@@ -356,6 +358,37 @@ export default async function WorkflowDetailPage({
                           <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-400">{supportCase.draftResponse}</p>
                         </div>
                       ) : null}
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        <form action={completeSupportSpecialistReviewAction} className="rounded-lg border border-amber-400/15 bg-amber-400/[0.04] p-3">
+                          <input type="hidden" name="workflowKey" value={workflow.id} />
+                          <input type="hidden" name="supportCaseId" value={supportCase.id} />
+                          <input type="hidden" name="specialistKey" value="nakamura" />
+                          <input type="hidden" name="status" value="completed" />
+                          <p className="text-xs uppercase tracking-wider text-amber-300">Nakamura technical review</p>
+                          <textarea name="reviewerComment" required rows={3} placeholder="Technical accuracy, security, test and release-risk findings." className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400" />
+                          <button className="mt-2 rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-amber-300">Record Nakamura review</button>
+                        </form>
+                        <form action={completeSupportSpecialistReviewAction} className="rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
+                          <input type="hidden" name="workflowKey" value={workflow.id} />
+                          <input type="hidden" name="supportCaseId" value={supportCase.id} />
+                          <input type="hidden" name="specialistKey" value="lawal" />
+                          <input type="hidden" name="status" value="completed" />
+                          <p className="text-xs uppercase tracking-wider text-emerald-300">Lawal compliance review</p>
+                          <textarea name="reviewerComment" required rows={3} placeholder="Data-protection, regulated-industry, policy, evidence and reportability findings." className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400" />
+                          <button className="mt-2 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300">Record Lawal review</button>
+                        </form>
+                      </div>
+                      <form action={createSupportKnowledgeFollowupAction} className="mt-3 rounded-lg border border-purple-400/15 bg-purple-400/[0.04] p-3">
+                        <input type="hidden" name="workflowKey" value={workflow.id} />
+                        <input type="hidden" name="supportCaseId" value={supportCase.id} />
+                        <p className="text-xs uppercase tracking-wider text-purple-300">Kristin knowledge follow-up</p>
+                        <div className="mt-2 grid gap-3 lg:grid-cols-2">
+                          <input name="draftTitle" required placeholder={`KB improvement: ${supportCase.subject}`} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:border-purple-400" />
+                          <input name="reusableFinding" required placeholder="Reusable finding from this case" className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:border-purple-400" />
+                          <textarea name="draftContent" required rows={4} placeholder="Draft support knowledge article, SOP update, or troubleshooting note." className="lg:col-span-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:border-purple-400" />
+                        </div>
+                        <button className="mt-2 rounded-lg bg-purple-400 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-purple-300">Create Kristin draft</button>
+                      </form>
                       <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
                         {supportCase.taskReference ? <Link href={`/tasks/${supportCase.taskReference}`} className="text-blue-300 hover:text-blue-200">Open task</Link> : null}
                         {supportCase.approvalId ? <Link href={`/approvals/${supportCase.approvalId}`} className="text-cyan-300 hover:text-cyan-200">Review approval</Link> : null}
@@ -410,6 +443,15 @@ export default async function WorkflowDetailPage({
                         <p className="mt-2 text-sm leading-6 text-slate-400">{String(request.githubIssuePayload.title ?? "Draft GitHub issue payload")}</p>
                         <p className="mt-1 text-xs text-slate-600">{String(request.githubIssuePayload.repository ?? "Repository configured in settings")}</p>
                       </div>
+                      <form action={verifyFeatureIntakeGitHubReadinessAction} className="mt-3 rounded-lg border border-blue-400/15 bg-blue-400/[0.04] p-3">
+                        <input type="hidden" name="workflowKey" value={workflow.id} />
+                        <input type="hidden" name="featureRequestId" value={request.id} />
+                        <p className="text-xs uppercase tracking-wider text-blue-300">PB-035 production readiness</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">
+                          Verify token configuration, repository reachability, Staffer evidence links and duplicate-execution protection before creating the approved GitHub issue.
+                        </p>
+                        <button className="mt-3 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-400">Verify GitHub readiness</button>
+                      </form>
                       <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
                         {request.taskReference ? <Link href={`/tasks/${request.taskReference}`} className="text-blue-300 hover:text-blue-200">Open task</Link> : null}
                         {request.approvalId ? <Link href={`/approvals/${request.approvalId}`} className="text-cyan-300 hover:text-cyan-200">Review approval</Link> : null}

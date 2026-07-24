@@ -37,8 +37,7 @@ for (const phrase of [
 const supportTriage = readFileSync("src/app/workflows/[id]/support-triage-actions.ts", "utf8");
 for (const phrase of [
   "assertAgentToolPermission",
-  "toolKey: \"knowledge_search\"",
-  "actionKey: \"knowledge.search\"",
+  "runKnowledgeSearchTool",
   "toolKey: \"email_draft\"",
   "actionKey: \"support.response_draft\"",
   "approvalMode: \"approval_request\"",

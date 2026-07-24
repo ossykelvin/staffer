@@ -44,14 +44,14 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] PB-026: Feature Intake to Engineering live workflow - added tenant-owned feature intake settings/requests, manual intake, queued task creation, durable workflow start, Nancy/Mobola/Anderson/Raj/Nakamura/Lawal deterministic artifacts, approval-gated GitHub issue payload with Staffer evidence links, approved GitHub issue execution path, tool execution telemetry, Feature Intake failure compensation to prevent phantom approval tasks after downstream write failures, and live RLS/index verification; production issue creation requires the product repo and `GITHUB_ISSUE_TOKEN`
 - [x] PB-027: Governance dashboards - added `/governance` with tenant metrics for audit, cost, quality, latency and failures backed by `staffer.get_governance_dashboard`, plus tool execution logs and task notification foundations
 - [x] PB-028: Safe internal tool permission enforcement - added server-only permission checks against the tenant tool catalogue and agent-tool mappings before internal tool use, with blocked-attempt telemetry/audit events, workflow allow-list checks and approval-context enforcement for protected GitHub/support-email execution
-- [ ] PB-029: Tool rate limits and circuit breakers - implement server-enforced per-tool/per-integration throttles, breaker states, retry windows and telemetry on top of PB-028 permissions
-- [ ] PB-030: Safe internal tool implementations - build first-class governed tools for knowledge search, task read/update, approval request and document draft
-- [ ] PB-031: Gmail read/draft integration - add Support Triage Gmail ingestion and Gmail draft creation while keeping sending approval-gated
-- [ ] PB-032: Approval centre completion - add sequential approvals, delegation, expiry, separation-of-duties, reviewer comments/history and mobile-friendly notifications
+- [x] PB-029: Tool rate limits and circuit breakers - added tenant-owned runtime policies, per-integration breaker state, retry windows, rate-limited/circuit-open statuses, audit telemetry and outcome updates for governed tool execution
+- [x] PB-030: Safe internal tool implementations - added server-only governed tools for knowledge search, task read/update, approval request and document draft with validation, PB-028/PB-029 enforcement and redacted telemetry
+- [x] PB-031: Gmail read/draft integration - added Gmail OAuth/API client, Support Triage Gmail ingestion endpoint/events, governed Gmail read/draft tools and approved Gmail draft creation without sending
+- [x] PB-032: Approval centre completion - added ordered review-step records, delegation/expiry/comment actions, high-risk separation-of-duties enforcement, mobile-friendly notification queue records, approval detail UI panels and `verify:approval-centre`
 - [x] PB-033: Knowledge upload and memory controls - added Supabase Storage uploads, built-in file safety scanning, version metadata, text extraction, deterministic embeddings, hybrid retrieval filters, memory-scope separation, approval-gated memory promotion, retention deletion approval with soft retirement, legal-hold controls and PB-033 static verification
-- [ ] PB-034: Complete Customer Support Triage specialist loop - add Nakamura technical review, Lawal compliance review and Kristin knowledge-base follow-up
-- [ ] PB-035: Complete Feature Intake production issue creation readiness - verify GitHub repo/token state and close production issue creation with evidence links
-- [ ] PB-036+: Remaining workflow lifecycles - break Documentation, Growth, Compliance, Daily Brief, Development Delivery and Release Readiness into implementation-sized backlog items
+- [x] PB-034: Complete Customer Support Triage specialist loop - added Nakamura technical/security/release-risk review capture, Lawal compliance review capture, Kristin document-draft knowledge follow-up, task/workflow/audit evidence and `verify:support-specialist-loop`
+- [x] PB-035: Complete Feature Intake production issue creation readiness - added recorded GitHub readiness checks for token/repo access, evidence-link verification, duplicate-execution blocking, UI controls and `verify:github-readiness`
+- [x] PB-036+: Remaining workflow lifecycles - converted Documentation, Growth, Compliance, Daily Brief, Development Delivery and Release Readiness into tenant-owned lifecycle records, task templates, queueable lifecycle requests, evidence/audit paths and `verify:workflow-lifecycle-foundations`; full vertical lifecycle builds remain future roadmap epics
 
 ## Current first-draft scope
 
@@ -130,14 +130,14 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 5 — Tool registry
 
 - [x] Define tool contract: key, description, input schema, output schema, risk class, timeout and required approval - extended tool contracts with timeout, rate-limit, circuit-breaker and redaction policy fields; existing tool catalogue keeps schemas, risk and approval flags.
-- [ ] Implement safe internal tools first: knowledge search, task read/update, approval request, document draft — tracked as PB-030.
-- [ ] Implement Gmail read and draft tools; sending remains separately approval-gated — tracked as PB-031.
+- [x] Implement safe internal tools first: knowledge search, task read/update, approval request, document draft — PB-030 added first-class server-only tools with schema validation, permission/runtime checks, redacted telemetry and audit.
+- [x] Implement Gmail read and draft tools; sending remains separately approval-gated — PB-031 added governed Gmail read/draft tools, Support Triage ingestion and approved draft creation only.
 - [ ] Implement Google Calendar read and draft-event tools
 - [ ] Implement GitHub read, issue-draft and PR-review-draft tools
 - [ ] Implement Vercel deployment status and log-read tools
 - [ ] Implement Supabase report/query tools using allow-listed operations only
 - [x] Add tool permission checks independent of the language model — PB-028 enforces agent-tool permissions through a server-only guard before knowledge search, support response draft/send, Feature Intake GitHub issue draft and approved GitHub issue creation; blocked attempts are written to `staffer.tool_execution_logs` and the audit trail.
-- [ ] Add rate limits and integration-specific circuit breakers — tracked as PB-029.
+- [x] Add rate limits and integration-specific circuit breakers — PB-029 added runtime policy tables, durable breaker state, retry windows and `rate_limited`/`circuit_open` audit telemetry.
 - [x] Add redaction of credentials and sensitive customer data from logs - added `staffer.tool_execution_logs` with redacted input/output summaries, redaction summary, approval links and metadata-only telemetry.
 
 **Acceptance:** A model cannot call a tool unless both agent permission and workflow policy permit it.
@@ -160,13 +160,13 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 7 — Approval centre
 
 - [x] Implement policy-driven approval creation — PB-021 added tenant-owned approval policies, policy snapshots and required reviewer counts for approval requests
-- [ ] Support one-person, multi-person and sequential approvals — tracked as PB-032.
+- [x] Support one-person, multi-person and sequential approvals — PB-032 added approval mode, current sequence tracking and ordered review-step records.
 - [x] Store evidence, proposed action and exact payload to be executed — approval detail pages now show the exact approved payload and canonical payload hash
-- [ ] Add approve, reject, request changes, delegate and expire actions — delegate and expire are tracked as PB-032.
+- [x] Add approve, reject, request changes, delegate and expire actions — PB-032 added delegate/expire actions and comment capture beside the existing decision flow.
 - [x] Verify approval at execution time; do not trust a model's claim of approval — `staffer.verify_approval_execution` checks approved status, expiry and exact payload hash before protected execution can proceed
-- [ ] Add separation-of-duties rules for high-risk actions — tracked as PB-032.
-- [ ] Add mobile-friendly approval notifications — tracked as PB-032.
-- [ ] Add immutable decision history and reviewer comments — tracked as PB-032.
+- [x] Add separation-of-duties rules for high-risk actions — PB-032 blocks requester self-approval for high-risk/separation-required decisions.
+- [x] Add mobile-friendly approval notifications — PB-032 added approval notification queue records and approval-page visibility.
+- [x] Add immutable decision history and reviewer comments — PB-032 added reviewer comment records linked to the existing append-only decision history.
 
 **Acceptance:** Protected actions are impossible without a valid, unexpired approval record matching the exact action payload.
 
@@ -187,16 +187,16 @@ The full roadmap below remains the source of truth for product phases. The immed
 ## Phase 9 — First live workflows
 
 ### Customer Support Triage
-- [ ] Gmail event creates queued task — PB-031 will add Gmail connector ingestion on top of PB-025's manual intake path and idempotent `source_message_id`.
+- [x] Gmail event creates queued task — PB-031 added `/api/integrations/gmail/support-triage`, `staffer.gmail_ingestion_events`, and idempotent Gmail message-to-Support-Triage task/case creation.
 - [x] Anna classifies customer, product, category, severity, sentiment, onboarding state, and SLA — PB-025 added settings-driven classification from support message content, product area and tenant severity/category rules.
 - [x] Retrieve approved knowledge and similar resolved cases — PB-025 calls the approved knowledge search RPC and stores retrieved citations on each support case; similar resolved-case retrieval remains a later enhancement.
 - [x] Anna performs approved first-line troubleshooting and drafts a professional, casual response with no unsupported commitments — PB-025 creates a citation-backed draft response and explicitly blocks customer-visible execution until approval.
 - [x] Route banking-application, access, data, security, compliance, or critical-incident concerns to the correct specialist without exposing sensitive information — PB-025 stores escalation targets from tenant routing rules for Anna, Nakamura and Lawal.
-- [ ] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — tracked as PB-034.
-- [ ] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — tracked as PB-034.
+- [x] Nakamura reviews technical accuracy, security, testing, and release risk for high-risk or security-relevant cases — PB-034 added governed specialist-review capture and task/workflow evidence.
+- [x] Lawal reviews data-protection, regulated-industry, policy, evidence, and reportability implications where relevant — PB-034 added governed compliance-review capture and audit evidence.
 - [x] Human approves external send — PB-025 creates a pending approval with exact payload hash for the support draft before any customer-visible action can proceed.
-- [x] Send or create draft based on organisation policy — PB-025A added the approved Brevo send path for Anna support responses: approval must be recorded, the stored payload is re-verified by `staffer.verify_approval_execution`, Brevo sends server-side, and case/task/workflow/audit evidence is updated. Gmail draft creation is tracked as PB-031.
-- [ ] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — tracked as PB-034.
+- [x] Send or create draft based on organisation policy — PB-025A added the approved Brevo send path and PB-031 added approved Gmail draft creation: both require recorded approval and exact-payload verification; Gmail draft creation does not send mail.
+- [x] Update task and ask Kristin to convert reusable findings into a draft knowledge-base improvement — PB-034 added governed document-draft follow-up through the safe internal tool.
 
 ### Feature Intake
 - [x] Capture feedback from form, email or manual input - manual live intake is implemented with `source_type`/`source_reference` fields ready for email/form/API idempotency.
@@ -207,7 +207,7 @@ The full roadmap below remains the source of truth for product phases. The immed
 - [x] Nakamura drafts acceptance, security, and release-risk tests - feature intake action stores `nakamura_test_plan`.
 - [x] Lawal identifies applicable data-protection, CQC, financial-services, ISO, audit, and policy-governance controls - feature intake action stores `lawal_compliance_review`.
 - [x] Founder approves roadmap or backlog outcome - feature intake now creates a pending approval with exact payload hash and reviewer count based on risk.
-- [ ] Create GitHub issue with evidence links - tracked as PB-035; governed execution action is implemented with exact-payload verification, issue creation telemetry, task/workflow/audit evidence and duplicate execution blocking, and production readiness now needs repo/token verification.
+- [x] Create GitHub issue with evidence links - PB-035 added readiness checks for configured token, repository reachability, Staffer evidence links and duplicate execution; governed execution remains exact-payload approval-gated.
 
 ### Documentation Lifecycle
 - [ ] Trigger from an approved feature, process, policy, release, or resolved support case

@@ -11,7 +11,9 @@ import type {
   ApprovalDecision,
   ApprovalDetailRecord,
   ApprovalExecutionCheck,
+  ApprovalMobileNotification,
   ApprovalRecord,
+  ApprovalReviewStep,
   FeatureIntakeData,
   FeatureIntakeRequest,
   GovernanceDashboard,
@@ -26,6 +28,9 @@ import type {
   TaskRecord,
   WorkflowDefinition,
   WorkflowExecutionDetail,
+  WorkflowLifecycle,
+  WorkflowLifecycleData,
+  WorkflowLifecycleRequest,
   WorkflowRun,
   WorkflowRunEvent,
   WorkflowRunStep,
@@ -432,6 +437,8 @@ function mapSupportTriageCase(record: JsonRecord): SupportTriageCase {
     draftStatus: String(record.draft_status ?? "not_started"),
     escalationTargets: asStringArray(record.escalation_targets),
     externalActionStatus: String(record.external_action_status ?? "pending_approval"),
+    specialistReviewStatus: String(record.specialist_review_status ?? "pending"),
+    knowledgeFollowupStatus: String(record.knowledge_followup_status ?? "not_required"),
     createdAt: String(record.created_at ?? new Date().toISOString()),
     updatedAt: String(record.updated_at ?? record.created_at ?? new Date().toISOString()),
   };
@@ -501,8 +508,89 @@ function demoSupportTriageData(): SupportTriageData {
         draftStatus: "needs_review",
         escalationTargets: ["anna", "nakamura", "lawal"],
         externalActionStatus: "approval_requested",
+        specialistReviewStatus: "in_review",
+        knowledgeFollowupStatus: "draft_requested",
         createdAt: now,
         updatedAt: now,
+      },
+    ],
+  };
+}
+
+function mapWorkflowLifecycle(record: JsonRecord, requestCount = 0): WorkflowLifecycle {
+  return {
+    id: String(record.id),
+    key: String(record.key ?? record.id),
+    name: String(record.name ?? record.key ?? "Workflow lifecycle"),
+    description: String(record.description ?? "Governed Staffer lifecycle."),
+    ownerAgentKey: typeof record.owner_agent_key === "string" ? record.owner_agent_key : null,
+    triggerTypes: asStringArray(record.trigger_types),
+    requiredApprovalActions: asStringArray(record.required_approval_actions),
+    defaultSteps: Array.isArray(record.default_steps) ? (record.default_steps as Record<string, unknown>[]) : [],
+    status: String(record.status ?? "draft"),
+    requestCount,
+  };
+}
+
+function mapWorkflowLifecycleRequest(record: JsonRecord): WorkflowLifecycleRequest {
+  return {
+    id: String(record.id),
+    lifecycleId: String(record.lifecycle_id),
+    taskId: typeof record.task_id === "string" ? record.task_id : null,
+    workflowRunId: typeof record.workflow_run_id === "string" ? record.workflow_run_id : null,
+    approvalId: typeof record.approval_id === "string" ? record.approval_id : null,
+    triggerType: String(record.trigger_type ?? "manual"),
+    triggerPayload: asJsonObject(record.trigger_payload),
+    status: String(record.status ?? "queued"),
+    evidence: asJsonObject(record.evidence),
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function demoWorkflowLifecycleData(): WorkflowLifecycleData {
+  const now = new Date().toISOString();
+  const lifecycles = [
+    ["documentation-lifecycle", "Documentation Lifecycle", "Governed knowledge artifacts from approved features, policies, releases and support cases.", "kristin"],
+    ["growth-campaign-lifecycle", "Growth Campaign Lifecycle", "Approval-gated growth objectives, assets, consent checks and launch actions.", "benny"],
+    ["compliance-assurance-lifecycle", "Compliance Assurance Lifecycle", "Obligations, controls, evidence, owners and formal compliance approvals.", "lawal"],
+    ["daily-command-brief", "Daily Command Brief", "Weekday command summary of risks, overdue work, approvals and customer signals.", "nathan"],
+    ["development-delivery-lifecycle", "Development Delivery Lifecycle", "Approved engineering work from scope confirmation through PR evidence.", "raj"],
+    ["release-readiness-gate", "Release Readiness Gate", "Quality, security, migration and rollback evidence before production release.", "raj"],
+  ].map(([key, name, description, ownerAgentKey], index) =>
+    mapWorkflowLifecycle(
+      {
+        id: `demo-lifecycle-${index + 1}`,
+        key,
+        name,
+        description,
+        owner_agent_key: ownerAgentKey,
+        trigger_types: ["manual_request"],
+        required_approval_actions: ["protected.action"],
+        default_steps: [
+          { key: "trigger", type: "trigger", name: "Capture governed trigger" },
+          { key: "task", type: "task", name: "Create task and evidence" },
+          { key: "approval", type: "approval", name: "Route protected approval where required" },
+        ],
+        status: "active",
+      },
+      0,
+    ),
+  );
+
+  return {
+    lifecycles,
+    requests: [
+      {
+        id: "demo-lifecycle-request-1",
+        lifecycleId: lifecycles[0]?.id ?? "demo-lifecycle-1",
+        taskId: "demo-task-lifecycle",
+        workflowRunId: null,
+        approvalId: null,
+        triggerType: "manual_request",
+        triggerPayload: { summary: "Demo lifecycle request" },
+        status: "queued",
+        evidence: { mode: "demo" },
+        createdAt: now,
       },
     ],
   };
@@ -826,6 +914,40 @@ function mapApprovalExecutionCheck(record: JsonRecord): ApprovalExecutionCheck {
   };
 }
 
+function mapApprovalReviewStep(record: JsonRecord): ApprovalReviewStep {
+  return {
+    id: String(record.id),
+    sequence: Number(record.sequence ?? 1),
+    reviewerUserId: typeof record.reviewer_user_id === "string" ? record.reviewer_user_id : null,
+    reviewerRole: typeof record.reviewer_role === "string" ? record.reviewer_role : null,
+    status: String(record.status ?? "pending"),
+    required: record.required !== false,
+    delegatedToUserId: typeof record.delegated_to_user_id === "string" ? record.delegated_to_user_id : null,
+    delegatedByUserId: typeof record.delegated_by_user_id === "string" ? record.delegated_by_user_id : null,
+    delegationComment: typeof record.delegation_comment === "string" ? record.delegation_comment : null,
+    reviewerComment: typeof record.reviewer_comment === "string" ? record.reviewer_comment : null,
+    availableAt: String(record.available_at ?? new Date().toISOString()),
+    expiresAt: typeof record.expires_at === "string" ? record.expires_at : null,
+    decidedAt: typeof record.decided_at === "string" ? record.decided_at : null,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+  };
+}
+
+function mapApprovalMobileNotification(record: JsonRecord): ApprovalMobileNotification {
+  return {
+    id: String(record.id),
+    channel: String(record.channel ?? "in_app"),
+    title: String(record.title ?? "Approval notification"),
+    body: String(record.body ?? ""),
+    actionUrl: typeof record.action_url === "string" ? record.action_url : null,
+    status: String(record.status ?? "queued"),
+    recipientUserId: typeof record.recipient_user_id === "string" ? record.recipient_user_id : null,
+    createdAt: String(record.created_at ?? new Date().toISOString()),
+    sentAt: typeof record.sent_at === "string" ? record.sent_at : null,
+    readAt: typeof record.read_at === "string" ? record.read_at : null,
+  };
+}
+
 function demoApprovalDetail(approvalId: string): ApprovalDetailRecord | null {
   const approval = demoApprovals.find((item) => item.id === approvalId);
   if (!approval) {
@@ -861,6 +983,25 @@ function demoApprovalDetail(approvalId: string): ApprovalDetailRecord | null {
     policyEvaluation,
     decisions: [],
     executionChecks: [],
+    reviewSteps: [
+      {
+        id: `${approval.id}-review-step-1`,
+        sequence: 1,
+        reviewerUserId: null,
+        reviewerRole: "founder",
+        status: "ready",
+        required: true,
+        delegatedToUserId: null,
+        delegatedByUserId: null,
+        delegationComment: null,
+        reviewerComment: null,
+        availableAt: new Date().toISOString(),
+        expiresAt: null,
+        decidedAt: null,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    mobileNotifications: [],
   };
 }
 
@@ -1277,7 +1418,7 @@ export async function getSupportTriageData(): Promise<SupportTriageData> {
     .schema("staffer")
     .from("support_triage_cases")
     .select(
-      "id, task_id, workflow_run_id, approval_id, source_type, customer_name, customer_email, subject, product_area, category, severity, sentiment, onboarding_state, sla_target_at, risk_class, classification, knowledge_query, citations, draft_response, draft_status, escalation_targets, external_action_status, created_at, updated_at, tasks(reference)",
+      "id, task_id, workflow_run_id, approval_id, source_type, customer_name, customer_email, subject, product_area, category, severity, sentiment, onboarding_state, sla_target_at, risk_class, classification, knowledge_query, citations, draft_response, draft_status, escalation_targets, external_action_status, specialist_review_status, knowledge_followup_status, created_at, updated_at, tasks(reference)",
     )
     .eq("organisation_id", context.organisationId)
     .order("created_at", { ascending: false })
@@ -1315,6 +1456,45 @@ export async function getFeatureIntakeData(): Promise<FeatureIntakeData> {
 
   return {
     requests: data.map((record) => mapFeatureIntakeRequest(record as JsonRecord)),
+  };
+}
+
+export async function getWorkflowLifecycleData(): Promise<WorkflowLifecycleData> {
+  const context = await getLiveContext();
+
+  if (!context?.organisationId) {
+    return demoWorkflowLifecycleData();
+  }
+
+  const [lifecyclesResult, requestsResult] = await Promise.all([
+    context.supabase
+      .schema("staffer")
+      .from("workflow_lifecycles")
+      .select("id, key, name, description, owner_agent_key, trigger_types, required_approval_actions, default_steps, status")
+      .eq("organisation_id", context.organisationId)
+      .order("name"),
+    context.supabase
+      .schema("staffer")
+      .from("workflow_lifecycle_requests")
+      .select("id, lifecycle_id, task_id, workflow_run_id, approval_id, trigger_type, trigger_payload, status, evidence, created_at")
+      .eq("organisation_id", context.organisationId)
+      .order("created_at", { ascending: false })
+      .limit(12),
+  ]);
+
+  if (lifecyclesResult.error || requestsResult.error || !lifecyclesResult.data) {
+    return demoWorkflowLifecycleData();
+  }
+
+  const requests = (requestsResult.data ?? []).map((record) => mapWorkflowLifecycleRequest(record as JsonRecord));
+  const requestCounts = new Map<string, number>();
+  for (const request of requests) {
+    requestCounts.set(request.lifecycleId, (requestCounts.get(request.lifecycleId) ?? 0) + 1);
+  }
+
+  return {
+    lifecycles: lifecyclesResult.data.map((record) => mapWorkflowLifecycle(record as JsonRecord, requestCounts.get(String(record.id)) ?? 0)),
+    requests,
   };
 }
 
@@ -1516,7 +1696,7 @@ export async function getApprovalDetailById(id: string): Promise<ApprovalDetailR
       : undefined,
   });
 
-  const [decisionsResult, executionChecksResult] = await Promise.all([
+  const [decisionsResult, executionChecksResult, reviewStepsResult, mobileNotificationsResult] = await Promise.all([
     context.supabase
       .schema("staffer")
       .from("approval_decisions")
@@ -1531,6 +1711,21 @@ export async function getApprovalDetailById(id: string): Promise<ApprovalDetailR
       .eq("organisation_id", context.organisationId)
       .eq("approval_id", approval.id)
       .order("checked_at", { ascending: false }),
+    context.supabase
+      .schema("staffer")
+      .from("approval_review_steps")
+      .select("id, sequence, reviewer_user_id, reviewer_role, required, status, delegated_to_user_id, delegated_by_user_id, delegation_comment, reviewer_comment, available_at, expires_at, decided_at, created_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("approval_id", approval.id)
+      .order("sequence", { ascending: true }),
+    context.supabase
+      .schema("staffer")
+      .from("approval_mobile_notifications")
+      .select("id, channel, title, body, action_url, status, recipient_user_id, created_at, sent_at, read_at")
+      .eq("organisation_id", context.organisationId)
+      .eq("approval_id", approval.id)
+      .order("created_at", { ascending: false })
+      .limit(6),
   ]);
 
   return {
@@ -1542,6 +1737,8 @@ export async function getApprovalDetailById(id: string): Promise<ApprovalDetailR
     },
     decisions: (decisionsResult.data ?? []).map((record) => mapApprovalDecision(record as JsonRecord)),
     executionChecks: (executionChecksResult.data ?? []).map((record) => mapApprovalExecutionCheck(record as JsonRecord)),
+    reviewSteps: (reviewStepsResult.data ?? []).map((record) => mapApprovalReviewStep(record as JsonRecord)),
+    mobileNotifications: (mobileNotificationsResult.data ?? []).map((record) => mapApprovalMobileNotification(record as JsonRecord)),
   };
 }
 

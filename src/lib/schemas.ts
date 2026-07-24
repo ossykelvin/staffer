@@ -310,6 +310,8 @@ export const supportTriageCaseSchema = z.object({
   draftStatus: nonEmptyString,
   escalationTargets: stringList,
   externalActionStatus: nonEmptyString,
+  specialistReviewStatus: nonEmptyString.optional(),
+  knowledgeFollowupStatus: nonEmptyString.optional(),
   createdAt: nonEmptyString,
   updatedAt: nonEmptyString,
 });
@@ -351,6 +353,37 @@ export const featureIntakeRequestSchema = z.object({
 
 export const featureIntakeDataSchema = z.object({
   requests: z.array(featureIntakeRequestSchema),
+});
+
+export const workflowLifecycleSchema = z.object({
+  id: nonEmptyString,
+  key: nonEmptyString,
+  name: nonEmptyString,
+  description: nonEmptyString,
+  ownerAgentKey: z.string().trim().nullable().optional(),
+  triggerTypes: stringList,
+  requiredApprovalActions: stringList,
+  defaultSteps: z.array(z.record(z.string(), z.unknown())),
+  status: nonEmptyString,
+  requestCount: z.number().int().nonnegative().default(0),
+});
+
+export const workflowLifecycleRequestSchema = z.object({
+  id: nonEmptyString,
+  lifecycleId: nonEmptyString,
+  taskId: z.string().trim().nullable().optional(),
+  workflowRunId: z.string().trim().nullable().optional(),
+  approvalId: z.string().trim().nullable().optional(),
+  triggerType: nonEmptyString,
+  triggerPayload: z.record(z.string(), z.unknown()),
+  status: nonEmptyString,
+  evidence: z.record(z.string(), z.unknown()),
+  createdAt: nonEmptyString,
+});
+
+export const workflowLifecycleDataSchema = z.object({
+  lifecycles: z.array(workflowLifecycleSchema),
+  requests: z.array(workflowLifecycleRequestSchema),
 });
 
 export const governanceDashboardSchema = z.object({
@@ -420,6 +453,36 @@ export const approvalExecutionCheckSchema = z.object({
   checkedAt: nonEmptyString,
 });
 
+export const approvalReviewStepSchema = z.object({
+  id: nonEmptyString,
+  sequence: z.number().int().positive(),
+  reviewerUserId: z.string().trim().nullable().optional(),
+  reviewerRole: z.string().trim().nullable().optional(),
+  status: nonEmptyString,
+  required: z.boolean(),
+  delegatedToUserId: z.string().trim().nullable().optional(),
+  delegatedByUserId: z.string().trim().nullable().optional(),
+  delegationComment: z.string().trim().nullable().optional(),
+  reviewerComment: z.string().trim().nullable().optional(),
+  availableAt: nonEmptyString,
+  expiresAt: z.string().trim().nullable().optional(),
+  decidedAt: z.string().trim().nullable().optional(),
+  createdAt: nonEmptyString,
+});
+
+export const approvalMobileNotificationSchema = z.object({
+  id: nonEmptyString,
+  channel: nonEmptyString,
+  title: nonEmptyString,
+  body: nonEmptyString,
+  actionUrl: z.string().trim().nullable().optional(),
+  status: nonEmptyString,
+  recipientUserId: z.string().trim().nullable().optional(),
+  createdAt: nonEmptyString,
+  sentAt: z.string().trim().nullable().optional(),
+  readAt: z.string().trim().nullable().optional(),
+});
+
 export const approvalPolicyEvaluationSchema = z.object({
   policyKey: nonEmptyString,
   policyName: nonEmptyString,
@@ -437,6 +500,8 @@ export const approvalDetailRecordSchema = z.object({
   policyEvaluation: approvalPolicyEvaluationSchema,
   decisions: z.array(approvalDecisionSchema),
   executionChecks: z.array(approvalExecutionCheckSchema),
+  reviewSteps: z.array(approvalReviewStepSchema).default([]),
+  mobileNotifications: z.array(approvalMobileNotificationSchema).default([]),
 });
 
 export const agentProfilesSchema = z.array(agentProfileSchema);
@@ -467,9 +532,14 @@ export type SupportTriageCase = z.infer<typeof supportTriageCaseSchema>;
 export type SupportTriageData = z.infer<typeof supportTriageDataSchema>;
 export type FeatureIntakeRequest = z.infer<typeof featureIntakeRequestSchema>;
 export type FeatureIntakeData = z.infer<typeof featureIntakeDataSchema>;
+export type WorkflowLifecycle = z.infer<typeof workflowLifecycleSchema>;
+export type WorkflowLifecycleRequest = z.infer<typeof workflowLifecycleRequestSchema>;
+export type WorkflowLifecycleData = z.infer<typeof workflowLifecycleDataSchema>;
 export type GovernanceDashboard = z.infer<typeof governanceDashboardSchema>;
 export type ApprovalRecord = z.infer<typeof approvalRecordSchema>;
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
+export type ApprovalReviewStep = z.infer<typeof approvalReviewStepSchema>;
+export type ApprovalMobileNotification = z.infer<typeof approvalMobileNotificationSchema>;
 export type ApprovalDetailRecord = z.infer<typeof approvalDetailRecordSchema>;
 export type ApprovalExecutionCheck = z.infer<typeof approvalExecutionCheckSchema>;
 export type ApprovalPolicyEvaluation = z.infer<typeof approvalPolicyEvaluationSchema>;

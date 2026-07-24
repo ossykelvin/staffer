@@ -29,6 +29,16 @@ export type GitHubIssueExecutionResult = {
   issueId?: number;
 };
 
+export type GitHubIssueReadinessResult = {
+  provider: "github";
+  mode: "demo" | "live";
+  repository: string;
+  tokenConfigured: boolean;
+  repositoryReachable: boolean;
+  status: "passed" | "failed" | "blocked";
+  failureReason?: string;
+};
+
 function githubApiUrl(baseUrl: string, path: string) {
   return `${baseUrl.replace(/\/+$/, "")}${path}`;
 }
@@ -155,5 +165,57 @@ export function getGitHubIssueConfigurationStatus() {
   return {
     apiBaseUrlConfigured: Boolean(process.env.GITHUB_API_BASE_URL),
     tokenConfigured: Boolean(process.env.GITHUB_ISSUE_TOKEN),
+  };
+}
+
+export async function verifyGitHubIssueRepositoryReadiness(repository: string): Promise<GitHubIssueReadinessResult> {
+  const parsedRepository = repositoryNameSchema.parse(repository);
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    return {
+      provider: "github",
+      mode: "demo",
+      repository: parsedRepository,
+      tokenConfigured: true,
+      repositoryReachable: true,
+      status: "passed",
+    };
+  }
+
+  const env = getGitHubIssueEnv();
+  const tokenConfigured = Boolean(env.GITHUB_ISSUE_TOKEN);
+  if (!env.GITHUB_API_BASE_URL || !tokenConfigured) {
+    return {
+      provider: "github",
+      mode: "live",
+      repository: parsedRepository,
+      tokenConfigured,
+      repositoryReachable: false,
+      status: "blocked",
+      failureReason: !env.GITHUB_API_BASE_URL ? "GITHUB_API_BASE_URL is not configured." : "GITHUB_ISSUE_TOKEN is not configured.",
+    };
+  }
+
+  const apiBaseUrl = env.GITHUB_API_BASE_URL;
+  const token = env.GITHUB_ISSUE_TOKEN;
+  if (!apiBaseUrl || !token) {
+    throw new Error("GitHub readiness configuration changed during verification.");
+  }
+
+  const [owner, repo] = parsedRepository.split("/");
+  const response = await fetch(githubApiUrl(apiBaseUrl, `/repos/${owner}/${repo}`), {
+    method: "GET",
+    headers: githubHeaders(token, env.GITHUB_ISSUE_USER_AGENT),
+  });
+  const payload = await parseGitHubResponse(response);
+
+  return {
+    provider: "github",
+    mode: "live",
+    repository: parsedRepository,
+    tokenConfigured,
+    repositoryReachable: response.ok,
+    status: response.ok ? "passed" : "failed",
+    failureReason: response.ok ? undefined : payload.message || `GitHub repository check failed with status ${response.status}.`,
   };
 }

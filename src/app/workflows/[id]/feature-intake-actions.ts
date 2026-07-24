@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
 import { getCurrentMembership, getCurrentUser } from "@/lib/auth";
 import { publicEnv } from "@/lib/env";
+import { verifyGitHubIssueRepositoryReadiness } from "@/lib/github/issues";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { assertAgentToolPermission } from "@/lib/tools/permissions";
+import { runApprovalRequestTool } from "@/lib/tools/internal";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -421,6 +423,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
       approvalMode: "approval_request",
       workflowAllowedActions: ["github.issue_draft"],
       workflowRequiresApproval: true,
+      integrationKey: "github",
       inputSummary: title.slice(0, 240),
       riskClass: classification.riskClass,
       metadata: {
@@ -430,40 +433,32 @@ export async function startFeatureIntakeAction(formData: FormData) {
       },
     });
 
-    const hashResult = await context.supabase.schema("staffer").rpc("approval_payload_hash", {
-      target_payload: actionPayload,
+    const approval = await runApprovalRequestTool({
+      supabase: context.supabase,
+      organisationId: context.membership.organisation_id,
+      agentId: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
+      actorUserId: context.user.id,
+      taskId: task.id,
+      workflowRunId,
+      actionKey: "github.issue_draft",
+      actionPayload,
+      riskClass: classification.riskClass,
+      requiredReviewerCount: classification.riskClass >= 4 ? 2 : 1,
+      policySnapshot: {
+        source: "PB-026 Feature Intake to Engineering",
+        createIssueRequiresApproval: githubPolicy.createIssueRequiresApproval !== false,
+        repository,
+        labels,
+      },
+      metadata: {
+        workflowKey,
+        source: "feature_intake",
+        repository,
+      },
     });
-    if (hashResult.error || typeof hashResult.data !== "string") {
-      throw new Error(hashResult.error?.message ?? "Unable to hash approval payload.");
-    }
-
-    const { data: approval, error: approvalError } = await context.supabase
-      .schema("staffer")
-      .from("approvals")
-      .insert({
-        organisation_id: context.membership.organisation_id,
-        task_id: task.id,
-        workflow_run_id: workflowRunId,
-        requested_by_agent_id: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
-        requested_by_user_id: context.user.id,
-        action_key: "github.issue_draft",
-        action_payload: actionPayload,
-        payload_hash: hashResult.data,
-        risk_class: classification.riskClass,
-        status: "pending",
-        required_reviewer_count: classification.riskClass >= 4 ? 2 : 1,
-        policy_snapshot: {
-          source: "PB-026 Feature Intake to Engineering",
-          createIssueRequiresApproval: githubPolicy.createIssueRequiresApproval !== false,
-          repository,
-          labels,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (approvalError || !approval?.id) {
-      throw new Error(approvalError?.message ?? "Unable to create feature approval request.");
+    const approvalId = typeof approval.id === "string" ? approval.id : "";
+    if (!approvalId) {
+      throw new Error("Unable to create feature approval request.");
     }
 
     const { data: featureRequest, error: featureError } = await context.supabase
@@ -473,7 +468,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         organisation_id: context.membership.organisation_id,
         task_id: task.id,
         workflow_run_id: workflowRunId,
-        approval_id: approval.id,
+        approval_id: approvalId,
         source_type: sourceType,
         source_reference: sourceReference || null,
         requester_name: requesterName || null,
@@ -493,7 +488,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         raj_delivery_plan: artifacts.rajDeliveryPlan,
         nakamura_test_plan: artifacts.nakamuraTestPlan,
         lawal_compliance_review: artifacts.lawalComplianceReview,
-        github_issue_payload: artifacts.githubIssuePayload,
+        github_issue_payload: actionPayload,
         status: "approval_requested",
         created_by: context.user.id,
       })
@@ -511,7 +506,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         agent_id: typeof nancyAgent?.id === "string" ? nancyAgent.id : null,
         task_id: task.id,
         workflow_run_id: workflowRunId,
-        approval_id: approval.id,
+        approval_id: approvalId,
         action_key: "github.issue_draft",
         status: "approval_required",
         risk_class: classification.riskClass,
@@ -519,7 +514,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         output_summary: "GitHub issue payload drafted but not created.",
         redaction_summary: "Customer/requester details remain in Staffer approval evidence; public issue body must be reviewed before creation.",
         idempotency_key: `feature-intake:github-draft:${featureRequest.id}`,
-        metadata: { repository, labels, payloadHash: hashResult.data },
+        metadata: { repository, labels, payloadHash: approval.payload_hash, approvalPayloadHash: "approval_payload_hash" },
         created_by: context.user.id,
       }),
       context.supabase.schema("staffer").from("task_evidence_events").insert({
@@ -528,7 +523,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         event_type: "system",
         title: "Feature intake package drafted",
         body: "Nancy, Mobola, Anderson, Raj, Nakamura and Lawal outputs were generated into an approval-gated GitHub issue payload.",
-        metadata: { featureRequestId: featureRequest.id, approvalId: approval.id, priority: classification.priority, riskClass: classification.riskClass },
+        metadata: { featureRequestId: featureRequest.id, approvalId, priority: classification.priority, riskClass: classification.riskClass },
         created_by: context.user.id,
       }),
       context.supabase.schema("staffer").rpc("record_workflow_run_event", {
@@ -538,7 +533,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
         target_event_type: "feature_intake.approval_requested",
         target_title: "Feature intake approval requested",
         target_body: "GitHub issue creation remains blocked pending exact-payload approval.",
-        target_metadata: { featureRequestId: featureRequest.id, taskId: task.id, approvalId: approval.id },
+        target_metadata: { featureRequestId: featureRequest.id, taskId: task.id, approvalId },
       }),
       context.supabase.schema("staffer").rpc("queue_task_notifications", {
         target_organisation_id: context.membership.organisation_id,
@@ -555,7 +550,7 @@ export async function startFeatureIntakeAction(formData: FormData) {
           taskId: task.id,
           taskReference: task.reference,
           workflowRunId,
-          approvalId: approval.id,
+          approvalId,
           priority: classification.priority,
           riskClass: classification.riskClass,
           repository,
@@ -576,5 +571,136 @@ export async function startFeatureIntakeAction(formData: FormData) {
       await recordFeatureIntakeFailure(contextForFailure, createdTask, error);
     }
     redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to create feature intake request." });
+  }
+}
+
+function issuePayloadHasEvidenceLinks(payload: JsonRecord) {
+  const body = typeof payload.body === "string" ? payload.body : "";
+  return body.includes("## Staffer evidence links") && /Staffer task|Workflow run|Approval/i.test(body);
+}
+
+export async function verifyFeatureIntakeGitHubReadinessAction(formData: FormData) {
+  const workflowKey = text(formData, "workflowKey") || "feature-intake";
+  const featureRequestId = text(formData, "featureRequestId");
+
+  if (publicEnv.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirectWithParams(`/workflows/${workflowKey}`, { message: "Demo GitHub readiness check passed for Feature Intake." });
+  }
+
+  try {
+    if (!featureRequestId) {
+      throw new Error("Feature request id is required.");
+    }
+
+    const context = await liveContext();
+    const { data: featureRequest, error: requestError } = await context.supabase
+      .schema("staffer")
+      .from("feature_intake_requests")
+      .select("id, task_id, workflow_run_id, approval_id, title, github_issue_payload, status")
+      .eq("organisation_id", context.membership.organisation_id)
+      .eq("id", featureRequestId)
+      .maybeSingle();
+    if (requestError || !featureRequest) {
+      throw new Error(requestError?.message ?? "Feature request was not found.");
+    }
+
+    const payload = asRecord(featureRequest.github_issue_payload);
+    const repository = typeof payload.repository === "string" ? payload.repository : "";
+    if (!repository) {
+      throw new Error("Feature request GitHub payload does not include a repository.");
+    }
+
+    const readiness = await verifyGitHubIssueRepositoryReadiness(repository);
+    const evidenceLinksVerified = issuePayloadHasEvidenceLinks(payload);
+    const duplicateExecutionBlocked = String(featureRequest.status ?? "") !== "github_issue_created";
+    const finalStatus = readiness.status === "passed" && evidenceLinksVerified && duplicateExecutionBlocked ? "passed" : readiness.status === "blocked" ? "blocked" : "failed";
+    const failureReason =
+      finalStatus === "passed"
+        ? null
+        : readiness.failureReason ??
+          (!evidenceLinksVerified
+            ? "GitHub issue payload is missing Staffer evidence links."
+            : !duplicateExecutionBlocked
+              ? "Feature request has already created a GitHub issue; duplicate execution remains blocked."
+              : "GitHub readiness check failed.");
+
+    const now = new Date().toISOString();
+    const writeResults = await Promise.all([
+      context.supabase.schema("staffer").from("github_readiness_checks").insert({
+        organisation_id: context.membership.organisation_id,
+        feature_request_id: featureRequest.id,
+        approval_id: featureRequest.approval_id ?? null,
+        repository,
+        token_configured: readiness.tokenConfigured,
+        repository_reachable: readiness.repositoryReachable,
+        evidence_links_verified: evidenceLinksVerified,
+        duplicate_execution_blocked: duplicateExecutionBlocked,
+        status: finalStatus,
+        checked_by: context.user.id,
+        check_payload: {
+          provider: readiness.provider,
+          mode: readiness.mode,
+          title: featureRequest.title,
+          approvalId: featureRequest.approval_id ?? null,
+          featureStatus: featureRequest.status,
+        },
+        failure_reason: failureReason,
+        checked_at: now,
+      }),
+      context.supabase
+        .schema("staffer")
+        .from("feature_intake_requests")
+        .update({ status: finalStatus === "passed" ? "github_ready_verified" : "github_readiness_blocked", updated_at: now })
+        .eq("organisation_id", context.membership.organisation_id)
+        .eq("id", featureRequest.id),
+      featureRequest.task_id
+        ? context.supabase.schema("staffer").from("task_evidence_events").insert({
+            organisation_id: context.membership.organisation_id,
+            task_id: featureRequest.task_id,
+            event_type: "github_readiness",
+            title: finalStatus === "passed" ? "Feature Intake GitHub readiness passed" : "Feature Intake GitHub readiness blocked",
+            body: finalStatus === "passed" ? `Repository ${repository} is reachable and evidence links are present.` : String(failureReason),
+            metadata: { workflowEventType: "feature_intake.github_readiness_checked", featureRequestId: featureRequest.id, repository, readiness, evidenceLinksVerified, duplicateExecutionBlocked },
+            created_by: context.user.id,
+          })
+        : Promise.resolve({ error: null }),
+      featureRequest.workflow_run_id
+        ? context.supabase.schema("staffer").rpc("record_workflow_run_event", {
+            target_organisation_id: context.membership.organisation_id,
+            target_workflow_run_id: featureRequest.workflow_run_id,
+            target_step_run_id: null,
+            target_event_type: "feature_intake.github_readiness_checked",
+            target_title: finalStatus === "passed" ? "GitHub readiness passed" : "GitHub readiness blocked",
+            target_body: finalStatus === "passed" ? `Repository ${repository} and evidence links are ready.` : String(failureReason),
+            target_metadata: { featureRequestId: featureRequest.id, repository, readiness, evidenceLinksVerified, duplicateExecutionBlocked },
+          })
+        : Promise.resolve({ error: null }),
+    ]);
+    const failedWrite = writeResults.find((result) => result?.error);
+    if (failedWrite?.error) {
+      throw new Error(failedWrite.error.message);
+    }
+
+    await recordAuditEvent({
+      organisationId: context.membership.organisation_id,
+      actorType: "user",
+      actorId: context.user.id,
+      eventType: finalStatus === "passed" ? "feature_intake.github_readiness_passed" : "feature_intake.github_readiness_blocked",
+      entityType: "feature_intake_request",
+      entityId: featureRequest.id,
+      summary: finalStatus === "passed" ? "Feature Intake GitHub production readiness was verified." : "Feature Intake GitHub production readiness is blocked.",
+      details: { featureRequestId: featureRequest.id, repository, readiness, evidenceLinksVerified, duplicateExecutionBlocked, failureReason },
+    });
+
+    revalidatePath(`/workflows/${workflowKey}`);
+    revalidatePath("/tasks");
+    redirectWithParams(`/workflows/${workflowKey}`, {
+      message: finalStatus === "passed" ? `GitHub readiness verified for ${repository}.` : `GitHub readiness blocked: ${failureReason}`,
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    redirectWithParams(`/workflows/${workflowKey}`, { error: error instanceof Error ? error.message : "Unable to verify GitHub readiness." });
   }
 }

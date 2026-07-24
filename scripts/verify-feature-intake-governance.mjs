@@ -69,7 +69,7 @@ for (const phrase of [
   "raj_delivery_plan: artifacts.rajDeliveryPlan",
   "nakamura_test_plan: artifacts.nakamuraTestPlan",
   "lawal_compliance_review: artifacts.lawalComplianceReview",
-  "github_issue_payload: artifacts.githubIssuePayload",
+  "github_issue_payload: actionPayload",
   "recordFeatureIntakeFailure",
   "update({ status: \"failed\" })",
   "Feature intake workflow failed",

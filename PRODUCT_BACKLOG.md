@@ -51,14 +51,14 @@ The current app shows the shape of that product, but most screens are still stat
 - [x] PB-026: Launch the second live workflow: Feature Intake to Engineering. Added live feature intake settings/requests, manual intake, durable workflow run creation, specialist artifacts from Nancy/Mobola/Anderson/Raj/Nakamura/Lawal, approval-gated GitHub issue payload with Staffer evidence links, approved GitHub issue execution path, task evidence, tool telemetry, failure compensation for downstream write failures and live RLS/index checks. Production execution still requires the product repo and `GITHUB_ISSUE_TOKEN`.
 - [x] PB-027: Add governance dashboards for audit, cost, quality, latency, and failures. Added `/governance`, `staffer.get_governance_dashboard`, tool execution logs and task notification foundations; verified with static checks, typecheck, lint, build and live schema checks.
 - [x] PB-028: Implement safe internal tool permission enforcement. Added a reusable server-only agent/tool permission guard over `staffer.tools` and `staffer.agent_tools`, blocked-attempt tool telemetry and audit events, workflow action allow-list checks, approval-context checks for protected execution, and wired enforcement into Support Triage knowledge/email-draft, Feature Intake GitHub-draft, approved GitHub issue creation and approved support email sending.
-- [ ] PB-029: Implement tool rate limits and integration-specific circuit breakers. Pair with PB-028 so every tool execution is permissioned, rate-limited, failure-aware and auditable before deeper integrations expand.
-- [ ] PB-030: Implement first-class safe internal tools. Build governed internal tools for knowledge search, task read/update, approval request and document draft without exposing unrestricted SQL, shell, deletion or production access.
-- [ ] PB-031: Implement Gmail read and draft integration. Add Gmail event ingestion for Support Triage and Gmail draft creation while keeping external sending separately approval-gated through the existing protected execution path.
-- [ ] PB-032: Complete the approval centre. Add sequential approvals, delegation, expiry, separation-of-duties checks, reviewer comments/history and mobile-friendly approval notifications.
+- [x] PB-029: Implement tool rate limits and integration-specific circuit breakers. Added tenant-owned runtime policies, per-integration breaker state, retry windows, rate-limited/circuit-open telemetry, audit events, and runtime outcome updates for internal, email, Gmail and GitHub tool paths.
+- [x] PB-030: Implement first-class safe internal tools. Added governed server-only tools for knowledge search, task read/update, approval request and document draft with schema validation, permission/runtime checks, redacted telemetry and audit evidence; Support Triage and Feature Intake now use the approval-request tool.
+- [x] PB-031: Implement Gmail read and draft integration. Added server-only Gmail OAuth/API client, governed Gmail read/draft tools, Support Triage ingestion endpoint/event table, idempotent Gmail message-to-case processing, and approved Gmail draft creation without Gmail send; production requires Gmail OAuth credentials and webhook token configuration.
+- [x] PB-032: Complete the approval centre. Added sequential review steps, delegation, expiry, separation-of-duties checks, reviewer comments/history and mobile-friendly approval notification records.
 - [x] PB-033: Knowledge upload and memory controls. Added Supabase Storage-backed knowledge uploads, built-in file safety scanning, upload/version metadata, text extraction, deterministic embeddings, hybrid retrieval filters for memory/project/customer/sensitivity, approval-gated memory promotion, retention deletion approval with soft retirement, legal-hold controls, audit events and static verification.
-- [ ] PB-034: Complete the Customer Support Triage specialist loop. Add Nakamura technical review, Lawal compliance review and Kristin knowledge-base follow-up so support cases close the review and reusable-learning loop.
-- [ ] PB-035: Complete Feature Intake production issue creation readiness. Verify GitHub repository/token state, confirm evidence-link payloads in production and close the roadmap item for GitHub issue creation.
-- [ ] PB-036+: Build the remaining workflow lifecycles. Deliver Documentation Lifecycle, Growth Campaign Lifecycle, Compliance Assurance, Daily Command Brief, Development Delivery and Release Readiness Gate in implementation-sized slices.
+- [x] PB-034: Complete the Customer Support Triage specialist loop. Added Nakamura technical review, Lawal compliance review and Kristin knowledge-base follow-up so support cases close the review and reusable-learning loop.
+- [x] PB-035: Complete Feature Intake production issue creation readiness. Added recorded GitHub repository/token readiness checks, evidence-link verification and duplicate-execution controls.
+- [x] PB-036+: Build the remaining workflow lifecycles. Converted Documentation, Growth, Compliance, Daily Brief, Development Delivery and Release Readiness into tenant-owned lifecycle definitions, task templates and queueable request foundations; full vertical lifecycle builds remain future epics.
 
 ## Ready backlog
 
@@ -197,6 +197,8 @@ The current app shows the shape of that product, but most screens are still stat
 
 **Touches:** `src/lib/tools`, workflow actions, approval execution actions, Supabase migrations, governance dashboard, verification scripts.
 
+**Implementation note:** Completed with `20260720101548_phase5_tool_rate_limits_internal_tools_gmail.sql`, `src/lib/tools/permissions.ts`, and `scripts/verify-tool-runtime-controls.mjs`. Runtime controls are enforced inside the existing PB-028 permission guard, and provider execution outcomes update durable circuit-breaker state.
+
 ### PB-030: Safe internal tool implementations
 
 **Problem:** The platform has permission enforcement, but the core internal tools are still scattered across workflow code instead of first-class governed tool implementations.
@@ -213,6 +215,8 @@ The current app shows the shape of that product, but most screens are still stat
 - Unsafe requests fail closed with actionable errors.
 
 **Touches:** `src/lib/tools`, workflow actions, task/approval/knowledge repositories, schemas, verification scripts.
+
+**Implementation note:** Completed with `src/lib/tools/internal.ts` and `scripts/verify-safe-internal-tools.mjs`. Internal tools are narrow, schema-validated and server-only; they do not expose raw SQL, shell, deletion or unrestricted production access.
 
 ### PB-031: Gmail read and draft integration
 
@@ -231,6 +235,8 @@ The current app shows the shape of that product, but most screens are still stat
 
 **Touches:** Gmail integration layer, Support Triage workflow, `support_triage_cases`, tool registry, env validation, verification scripts.
 
+**Implementation note:** Completed with `src/lib/gmail/client.ts`, `src/lib/gmail/support-triage.ts`, `src/lib/tools/gmail.ts`, `src/app/api/integrations/gmail/support-triage/route.ts`, and `scripts/verify-gmail-integration.mjs`. Gmail Pub/Sub history events are queued/audited; direct Gmail message IDs create idempotent Support Triage tasks/cases. Draft creation is exact-payload approved and never sends mail.
+
 ### PB-032: Approval centre completion
 
 **Problem:** Approvals support policy-driven creation and exact-payload checks, but advanced reviewer workflows remain incomplete.
@@ -247,6 +253,8 @@ The current app shows the shape of that product, but most screens are still stat
 - Mobile-friendly notification data is available without requiring external push delivery yet.
 
 **Touches:** Approval schema/migrations, approval actions/pages, notification tables, policy engine, verification scripts.
+
+**Implementation note:** Completed with `20260722010134_complete_outstanding_governance_workflows.sql`, approval review-step and mobile-notification schemas, delegate/expire/comment server actions, separation-of-duties enforcement, approval-page review panels and `scripts/verify-approval-centre-completion.mjs`.
 
 ### PB-033: Knowledge upload and memory controls
 
@@ -280,6 +288,8 @@ The current app shows the shape of that product, but most screens are still stat
 
 **Touches:** Support Triage workflow, task/evidence tables, approvals, knowledge draft tooling, UI panels, verification scripts.
 
+**Implementation note:** Completed with support specialist review and knowledge follow-up tables, Nakamura/Lawal review actions, Kristin document-draft follow-up through the safe internal tool, workflow/task/audit evidence and `scripts/verify-support-specialist-loop.mjs`.
+
 ### PB-035: Complete Feature Intake production issue creation readiness
 
 **Problem:** Feature Intake has the issue execution path, but the roadmap remains open until production repository/token configuration and evidence links are verified end to end.
@@ -297,6 +307,8 @@ The current app shows the shape of that product, but most screens are still stat
 
 **Touches:** GitHub integration, approval execution action, Feature Intake workflow, Vercel env config, verification scripts.
 
+**Implementation note:** Completed with `staffer.github_readiness_checks`, `verifyGitHubIssueRepositoryReadiness`, Feature Intake readiness server action/UI, evidence-linked payload persistence and `scripts/verify-github-readiness.mjs`. Production issue creation still requires the configured token to be valid at runtime and the approval to be exact-payload verified.
+
 ### PB-036+: Remaining workflow lifecycles
 
 **Problem:** The major operating lifecycles after Support Triage and Feature Intake are still mostly roadmap-level descriptions.
@@ -311,6 +323,8 @@ The current app shows the shape of that product, but most screens are still stat
 - No lifecycle relies on hardcoded tenant policy, schedule, provider, threshold or external endpoint.
 
 **Touches:** Workflow definitions, task templates, tools, approvals, knowledge, governance dashboard, integration-specific code.
+
+**Implementation note:** Completed as lifecycle foundations with `staffer.workflow_lifecycles`, `staffer.workflow_lifecycle_requests`, seeded lifecycle definitions/task templates, queueable request action, workflow page UI and `scripts/verify-workflow-lifecycle-foundations.mjs`. The six full vertical lifecycle products remain future implementation epics.
 
 ## Sequencing rules
 
