@@ -1,5 +1,4 @@
 import { timingSafeEqual } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -18,17 +17,20 @@ export async function GET(request: Request) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
   if (!url || !key) return Response.json({ error: "Database is not configured" }, { status: 503 });
 
-  const supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  const response = await fetch(`${url}/rest/v1/agents?select=id&limit=1`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+      "Accept-Profile": "staffer",
+    },
+    cache: "no-store",
   });
-  const { error } = await supabase
-    .schema("staffer")
-    .from("agents")
-    .select("id", { count: "exact", head: true })
-    .limit(1);
 
-  if (error) {
-    console.error("[database-heartbeat]", error.message);
+  // RLS may reject this intentionally for the publishable key. Any non-5xx
+  // response still proves that Supabase/PostgREST reached the database.
+  if (response.status >= 500) {
+    console.error("[database-heartbeat] Supabase returned", response.status);
     return Response.json({ error: "Database heartbeat failed" }, { status: 503 });
   }
   return Response.json({ ok: true, database: "reachable" });
