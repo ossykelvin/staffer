@@ -11,6 +11,7 @@ Staffer is KOP Technology's governed AI workforce platform. It gives human-like 
 The full roadmap below remains the source of truth for product phases. The immediate tick-off backlog is maintained in [`PRODUCT_BACKLOG.md`](PRODUCT_BACKLOG.md) so implementation can proceed in small, reviewable slices.
 
 - [x] PB-001: Define the route map and clickable interaction contract — implemented in `docs/interaction-contract.md`; verified with lint, typecheck, build and HTTP smoke checks; no git commit because this folder is not a git repository
+- [x] Operations: Add a protected daily Vercel database heartbeat — executes a read-only Staffer-schema query and uses the server-only `CRON_SECRET`.
 - [x] PB-002: Make task rows clickable and add task detail pages — implemented `/tasks/[id]` and linked dashboard/task rows; verified with lint, typecheck, build and `/tasks/TSK-1042` smoke check; no git commit because this folder is not a git repository
 - [x] PB-003: Add a demo-mode task creation flow — implemented `/tasks/new` with validated non-persistent demo confirmation; verified with lint, typecheck, build and `/tasks/new` smoke check; no git commit because this folder is not a git repository
 - [x] PB-004: Add approval detail pages with review, approve, reject and request-changes states — implemented `/approvals/[id]` and demo decision controls; verified with lint, typecheck, build and `/approvals/APR-221` smoke check; no git commit because this folder is not a git repository
